@@ -1,0 +1,39 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.pid.lock
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Local environment files
+# .env
+.env.local
+
+# Build output
+dist/
+build/
+
+# Coverage directory used by testing tools
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE or editor directories and files
+.vscode/
+.idea/
+.DS_Store
+
+# Operating system files
+Thumbs.db
+*.swp
