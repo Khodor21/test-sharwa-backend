@@ -7,7 +7,6 @@ const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 
 const createCategory = async (req, res) => {
   try {
-
     const { title, description } = req.body;
     const { buffer, originalname, mimetype } = req.file;
     const fileName = originalname;
@@ -22,7 +21,7 @@ const createCategory = async (req, res) => {
     const category = new Category({
       title,
       description,
-      image,
+      image: imageUrl,
     });
 
     await category.save();
