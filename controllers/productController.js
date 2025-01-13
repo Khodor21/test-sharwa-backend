@@ -1,6 +1,11 @@
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const mongoose = require("mongoose");
+const multer = require("multer");
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 
 const handleResponse = (res, data, statusCode = 200, message = null) => {
   return res.status(statusCode).json({
@@ -26,7 +31,7 @@ const createProduct = async (req, res) => {
     category_id,
     related_products,
     pin,
-    main_image,
+    // main_image,
     images,
     quantity,
     price,
@@ -43,6 +48,16 @@ const createProduct = async (req, res) => {
       });
     }
 
+    const { buffer, originalname, mimetype } = req.file;
+    const fileName = originalname;
+
+    const imageUrl = await uploadImageToFirebase(
+      buffer,
+      fileName,
+      mimetype,
+      "products"
+    );
+
     // Create a new product
     const product = new Product({
       title,
@@ -50,7 +65,7 @@ const createProduct = async (req, res) => {
       category_id,
       related_products,
       pin,
-      main_image,
+      main_image: imageUrl,
       images,
       quantity,
       price,
@@ -163,4 +178,5 @@ module.exports = {
   getProductById,
   updateProduct,
   deleteProduct,
+  upload,
 };
