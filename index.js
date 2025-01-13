@@ -1,22 +1,23 @@
 const express = require("express");
 const app = express();
-const imagesTesting = require("./routes/imagesTesting");
-const categoryRoutes = require("./routes/categoriesRoutes");
+const categoriesRoutes = require("./routes/categoriesRoutes");
 const productRoutes = require("./routes/productRoutes");
-const PORT = process.env.PORT || 5000;
+
 const connectDB = require("./config/db");
+const cors = require("cors");
+
+require("dotenv").config();
+const PORT = process.env.PORT;
+
+app.use(cors({ origin: "http://localhost:3000" }));
 
 app.use(express.json());
 
-// Set up your routes
-app.use("/api", imagesTesting);
-app.use("/api", categoryRoutes);
+app.use("/api", categoriesRoutes);
 app.use("/api", productRoutes);
-
-// Connect to database
 connectDB();
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

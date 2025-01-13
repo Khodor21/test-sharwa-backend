@@ -18,20 +18,22 @@ pids
 # .env
 .env.local
 
-# Build output
-dist/
-build/
+
+/dist
+/build
 
 # Coverage directory used by testing tools
-coverage/
+/coverage
+
 
 # Temporary files
 *.tmp
 *.temp
 
 # IDE or editor directories and files
-.vscode/
-.idea/
+
+/.vscode
+/.idea
 .DS_Store
 
 # Operating system files

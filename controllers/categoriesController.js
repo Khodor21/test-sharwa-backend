@@ -1,43 +1,23 @@
 const Category = require("../models/Category");
-const bucket = require("../config/firebase");
+
 const multer = require("multer");
-const path = require("path");
+const upload = multer({ storage: multer.memoryStorage() });
 
-const upload = multer({ dest: "uploads/" });
+const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 
-const uploadImageToFirebase = async (filePath) => {
-  const destination = `categories/${path.basename(filePath)}`;
-  await bucket.upload(filePath, {
-    destination,
-    public: true,
-  });
-  return `https://storage.googleapis.com/${bucket.name}/${destination}`;
-};
-
-//Khodor's function
-// const createCategory = async (req, res) => {
-//   try {
-//     const { title, description } = req.body;
-//     const filePath = req.file.path;
-//     const imageUrl = await uploadImageToFirebase(filePath);
-
-//     const category = new Category({
-//       title,
-//       description,
-//       image: imageUrl,
-//     });
-
-//     await category.save();
-//     res.status(201).json(category);
-//   } catch (error) {
-//     res.status(500).json({ message: "Error creating category", error });
-//   }
-// };
-
-//Oussama's function
 const createCategory = async (req, res) => {
   try {
-    const { title, description, image } = req.body;
+
+    const { title, description } = req.body;
+    const { buffer, originalname, mimetype } = req.file;
+    const fileName = originalname;
+
+    const imageUrl = await uploadImageToFirebase(
+      buffer,
+      fileName,
+      mimetype,
+      "categories"
+    );
 
     const category = new Category({
       title,
@@ -95,7 +75,6 @@ const deleteCategory = async (req, res) => {
 module.exports = {
   createCategory,
   getAllCategories,
-  // getCategoryById,
   updateCategory,
   deleteCategory,
   upload,
