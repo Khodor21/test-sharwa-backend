@@ -2,6 +2,8 @@ const express = require("express");
 const app = express();
 const categoriesRoutes = require("./routes/categoriesRoutes");
 const productRoutes = require("./routes/productRoutes");
+const authRoutes = require("./routes/authRoutes");
+const profileRoutes = require("./routes/profileRoutes");
 
 const connectDB = require("./config/db");
 const cors = require("cors");
@@ -15,6 +17,9 @@ app.use(express.json());
 
 app.use("/api", categoriesRoutes);
 app.use("/api", productRoutes);
+app.use("/api", authRoutes);
+app.use("/api", profileRoutes);
+
 connectDB();
 
 // Start the server

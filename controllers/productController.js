@@ -31,8 +31,6 @@ const createProduct = async (req, res) => {
     category_id,
     related_products,
     pin,
-    // main_image,
-    images,
     quantity,
     price,
     target_audience,
@@ -48,15 +46,35 @@ const createProduct = async (req, res) => {
       });
     }
 
-    const { buffer, originalname, mimetype } = req.file;
-    const fileName = originalname;
+    // Process uploaded images
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No images uploaded",
+      });
+    }
 
-    const imageUrl = await uploadImageToFirebase(
-      buffer,
-      fileName,
-      mimetype,
+    // Upload the first image as the main image
+    const mainImageFile = req.files[0];
+    const mainImageUrl = await uploadImageToFirebase(
+      mainImageFile.buffer,
+      mainImageFile.originalname,
+      mainImageFile.mimetype,
       "products"
     );
+
+    // Upload additional images
+    const additionalImages = [];
+    for (let i = 1; i < req.files.length; i++) {
+      const file = req.files[i];
+      const imageUrl = await uploadImageToFirebase(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "products"
+      );
+      additionalImages.push(imageUrl);
+    }
 
     // Create a new product
     const product = new Product({
@@ -65,8 +83,8 @@ const createProduct = async (req, res) => {
       category_id,
       related_products,
       pin,
-      main_image: imageUrl,
-      images,
+      main_image: mainImageUrl,
+      images: additionalImages,
       quantity,
       price,
       target_audience,

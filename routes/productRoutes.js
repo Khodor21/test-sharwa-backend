@@ -5,7 +5,7 @@ const productController = require("../controllers/productController");
 // Create a new product
 router.post(
   "/product",
-  productController.upload.single("image"),
+  productController.upload.array("images", 10),
   productController.createProduct
 );
 
@@ -16,7 +16,7 @@ router.get("/products", productController.getAllProducts);
 router.get("/products/:id", productController.getProductById);
 
 // Update a product
-router.post("/products/:id", productController.updateProduct);
+router.put("/products/:id", productController.updateProduct);
 
 // Delete a product
 router.delete("/products/:id", productController.deleteProduct);
