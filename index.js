@@ -5,6 +5,7 @@ const productRoutes = require("./routes/productRoutes");
 const authRoutes = require("./routes/authRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const mainSectionRoutes = require("./routes/mainSectionRoutes");
+const orderRoutes = require("./routes/orderRoutes");
 
 const connectDB = require("./config/db");
 const cors = require("cors");
@@ -21,6 +22,7 @@ app.use("/api", productRoutes);
 app.use("/api", authRoutes);
 app.use("/api", profileRoutes);
 app.use("/api", mainSectionRoutes);
+app.use("/api", orderRoutes);
 
 connectDB();
 
