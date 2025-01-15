@@ -16,7 +16,11 @@ router.get("/products", productController.getAllProducts);
 router.get("/products/:id", productController.getProductById);
 
 // Update a product
-router.put("/products/:id", productController.updateProduct);
+router.post(
+  "/products/:id",
+  productController.upload.array("images", 10),
+  productController.updateProduct
+);
 
 // Delete a product
 router.delete("/products/:id", productController.deleteProduct);

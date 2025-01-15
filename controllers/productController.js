@@ -6,22 +6,7 @@ const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 
 const { uploadImageToFirebase } = require("../utils/firebaseUtils");
-
-const handleResponse = (res, data, statusCode = 200, message = null) => {
-  return res.status(statusCode).json({
-    success: true,
-    message: message || "Operation successful",
-    data: data,
-  });
-};
-
-const handleError = (res, error, statusCode = 500) => {
-  console.error(error);
-  return res.status(statusCode).json({
-    success: false,
-    message: error.message || "Something went wrong",
-  });
-};
+const { handleResponse, handleError } = require("../utils/helpers");
 
 // Create Product
 const createProduct = async (req, res) => {
@@ -29,7 +14,7 @@ const createProduct = async (req, res) => {
     title,
     description,
     category_id,
-    related_products,
+    // related_products,
     pin,
     quantity,
     price,
@@ -81,7 +66,7 @@ const createProduct = async (req, res) => {
       title,
       description,
       category_id,
-      related_products,
+      related_products: [],
       pin,
       main_image: mainImageUrl,
       images: additionalImages,
@@ -140,7 +125,6 @@ const getProductById = async (req, res) => {
 // Update Product
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const updateData = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({
@@ -149,22 +133,99 @@ const updateProduct = async (req, res) => {
     });
   }
 
+  const {
+    title,
+    description,
+    category_id,
+    // related_products,
+    pin,
+    quantity,
+    price,
+    target_audience,
+  } = req.body;
+
   try {
-    const product = await Product.findByIdAndUpdate(id, updateData, {
-      new: true,
-    });
-    if (!product) {
+    // Validate that the category_id (if provided) exists
+    if (category_id) {
+      const category = await Category.findById(category_id);
+      if (!category) {
+        return res.status(400).json({
+          success: false,
+          message: "Category not found",
+        });
+      }
+    }
+
+    // Fetch the existing product
+    const existingProduct = await Product.findById(id);
+    if (!existingProduct) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
-    return handleResponse(res, product, 200, "Product updated successfully");
+
+    // Initialize updated product data
+    const updatedData = {
+      title: title || existingProduct.title,
+      description: description || existingProduct.description,
+      category_id: category_id || existingProduct.category_id,
+      related_products: existingProduct.related_products,
+      // related_products: related_products || existingProduct.related_products,
+      pin: pin !== undefined ? pin : existingProduct.pin,
+      quantity: quantity !== undefined ? quantity : existingProduct.quantity,
+      price: price !== undefined ? price : existingProduct.price,
+      target_audience: target_audience || existingProduct.target_audience,
+    };
+
+    // Handle uploaded images if provided
+    if (req.files && req.files.length > 0) {
+      // Upload new main image
+      const mainImageFile = req.files[0];
+      const mainImageUrl = await uploadImageToFirebase(
+        mainImageFile.buffer,
+        mainImageFile.originalname,
+        mainImageFile.mimetype,
+        "products"
+      );
+
+      updatedData.main_image = mainImageUrl;
+
+      // Upload new additional images
+      const additionalImages = [];
+      for (let i = 1; i < req.files.length; i++) {
+        const file = req.files[i];
+        const imageUrl = await uploadImageToFirebase(
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+          "products"
+        );
+        additionalImages.push(imageUrl);
+      }
+
+      updatedData.images = additionalImages;
+    } else {
+      // If no new images are provided, retain existing images
+      updatedData.main_image = existingProduct.main_image;
+      updatedData.images = existingProduct.images;
+    }
+
+    // Update the product
+    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
+      new: true,
+    });
+
+    return handleResponse(
+      res,
+      updatedProduct,
+      200,
+      "Product updated successfully"
+    );
   } catch (error) {
     return handleError(res, error);
   }
 };
-
 // Delete Product
 const deleteProduct = async (req, res) => {
   const { id } = req.params;
