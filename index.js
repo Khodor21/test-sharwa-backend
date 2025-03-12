@@ -1,15 +1,17 @@
 const express = require("express");
 const app = express();
 const imagesTesting = require("./routes/imagesTesting");
-const productRoutes = require("./routes/productRoutes"); 
-const PORT = process.env.PORT || 5000; 
+const categoryRoutes = require("./routes/categoriesRoutes");
+const productRoutes = require("./routes/productRoutes");
+const PORT = process.env.PORT || 5000;
 const connectDB = require("./config/db");
 
-app.use(express.json()); 
+app.use(express.json());
 
 // Set up your routes
 app.use("/api", imagesTesting);
-app.use("/api/products", productRoutes); 
+app.use("/api", categoryRoutes);
+app.use("/api", productRoutes);
 
 // Connect to database
 connectDB();

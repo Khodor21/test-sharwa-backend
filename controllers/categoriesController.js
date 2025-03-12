@@ -14,16 +14,35 @@ const uploadImageToFirebase = async (filePath) => {
   return `https://storage.googleapis.com/${bucket.name}/${destination}`;
 };
 
+//Khodor's function
+// const createCategory = async (req, res) => {
+//   try {
+//     const { title, description } = req.body;
+//     const filePath = req.file.path;
+//     const imageUrl = await uploadImageToFirebase(filePath);
+
+//     const category = new Category({
+//       title,
+//       description,
+//       image: imageUrl,
+//     });
+
+//     await category.save();
+//     res.status(201).json(category);
+//   } catch (error) {
+//     res.status(500).json({ message: "Error creating category", error });
+//   }
+// };
+
+//Oussama's function
 const createCategory = async (req, res) => {
   try {
-    const { title, description } = req.body;
-    const filePath = req.file.path;
-    const imageUrl = await uploadImageToFirebase(filePath);
+    const { title, description, image } = req.body;
 
     const category = new Category({
       title,
       description,
-      image: imageUrl,
+      image,
     });
 
     await category.save();
@@ -76,7 +95,7 @@ const deleteCategory = async (req, res) => {
 module.exports = {
   createCategory,
   getAllCategories,
-  getCategoryById,
+  // getCategoryById,
   updateCategory,
   deleteCategory,
   upload,
