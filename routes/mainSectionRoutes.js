@@ -3,21 +3,21 @@ const router = express.Router();
 const mainSectionController = require("../controllers/mainSectionController");
 
 router.post(
-  "/main-section",
+  "/main-sections",
   mainSectionController.upload.array("images", 10),
   mainSectionController.createMainSection
 );
 
-router.get("/main-section", mainSectionController.getAllMainSections);
+router.get("/main-sections", mainSectionController.getAllMainSections);
 
-router.get("/main-section/:id", mainSectionController.getMainSectionById);
+router.get("/main-sections/:id", mainSectionController.getMainSectionById);
 
 router.post(
-  "/main-section/:id",
+  "/main-sections/:id",
   mainSectionController.upload.array("images", 10),
   mainSectionController.updateMainSection
 );
 
-router.delete("/main-section/:id", mainSectionController.deleteMainSection);
+router.delete("/main-sections/:id", mainSectionController.deleteMainSection);
 
 module.exports = router;
