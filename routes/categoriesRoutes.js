@@ -8,7 +8,7 @@ const {
   upload,
 } = require("../controllers/categoriesController");
 
-router.post("/category", upload.array("images", 5), createCategory);
+router.post("/category", upload.single("image"), createCategory);
 
 router.get("/categories", getAllCategories);
 

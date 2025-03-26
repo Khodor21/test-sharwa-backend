@@ -1,20 +1,26 @@
 const express = require("express");
 const app = express();
+
 const categoriesRoutes = require("./routes/categoriesRoutes");
 const productRoutes = require("./routes/productRoutes");
 const authRoutes = require("./routes/authRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const mainSectionRoutes = require("./routes/mainSectionRoutes");
 const orderRoutes = require("./routes/orderRoutes");
-
+const configurationRoutes = require("./routes/configurationRoutes");
+const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const cors = require("cors");
 
 require("dotenv").config();
 const PORT = process.env.PORT;
 
-app.use(cors({ origin: "http://localhost:3000" }));
-
+const corsOptions = {
+  origin: "http://localhost:3000",
+  credentials: true,
+};
+app.use(cors(corsOptions));
+app.use(cookieParser());
 app.use(express.json());
 
 app.use("/api", categoriesRoutes);
@@ -23,6 +29,7 @@ app.use("/api", authRoutes);
 app.use("/api", profileRoutes);
 app.use("/api", mainSectionRoutes);
 app.use("/api", orderRoutes);
+app.use("/api", configurationRoutes);
 
 connectDB();
 

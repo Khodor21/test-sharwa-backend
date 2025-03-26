@@ -10,7 +10,11 @@ const createCategory = async (req, res) => {
     const { title, description } = req.body;
     const { buffer, originalname, mimetype } = req.file;
     const fileName = originalname;
-
+    console.log("Request Body:", req.body);
+    console.log("Request File:", req.file);
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
     const imageUrl = await uploadImageToFirebase(
       buffer,
       fileName,

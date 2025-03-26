@@ -1,9 +1,33 @@
 const User = require("../models/User");
+const jwt = require("jsonwebtoken");
+
+const getAllCustomers = async (req, res) => {
+  try {
+    const customers = await User.find();
+    res.status(200).json(customers);
+  } catch (error) {
+    return res.status(500).json({ message: "Something Went Wrong", error });
+  }
+};
 
 const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res
+        .status(401)
+        .json({ message: "No token provided, authorization denied" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -12,7 +36,7 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { name, phoneNumber, district, city, adress } = req.body;
+    const { name, phoneNumber, district, city, address } = req.body;
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -20,7 +44,7 @@ const updateProfile = async (req, res) => {
     user.phoneNumber = phoneNumber || user.phoneNumber;
     user.district = district || user.district;
     user.city = city || user.city;
-    user.adress = adress || user.adress;
+    user.address = address || user.address;
 
     await user.save();
 
@@ -32,13 +56,23 @@ const updateProfile = async (req, res) => {
 
 const deleteAccount = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.user.id);
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findByIdAndDelete(decoded.id);
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      path: "/",
+    });
 
     res.status(200).json({ message: "Account deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
-module.exports = { getProfile, updateProfile, deleteAccount };
+module.exports = { getAllCustomers, getProfile, updateProfile, deleteAccount };
