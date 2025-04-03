@@ -14,15 +14,14 @@ const createProduct = async (req, res) => {
     title,
     description,
     category_id,
-    // related_products,
     pin,
     quantity,
     price,
     target_audience,
   } = req.body;
-
+  console.log("BODY:", req.body);
+  console.log("FILES:", req.files);
   try {
-    // Validate that category_id exists
     const category = await Category.findById(category_id);
     if (!category) {
       return res.status(400).json({
@@ -31,7 +30,6 @@ const createProduct = async (req, res) => {
       });
     }
 
-    // Process uploaded images
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
@@ -39,7 +37,12 @@ const createProduct = async (req, res) => {
       });
     }
 
-    // Upload the first image as the main image
+    if (!req.body || !req.files) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing form data or files",
+      });
+    }
     const mainImageFile = req.files[0];
     const mainImageUrl = await uploadImageToFirebase(
       mainImageFile.buffer,
@@ -61,7 +64,7 @@ const createProduct = async (req, res) => {
       additionalImages.push(imageUrl);
     }
 
-    // Create a new product
+    // Create the new product
     const product = new Product({
       title,
       description,

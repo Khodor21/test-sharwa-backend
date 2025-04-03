@@ -7,11 +7,11 @@ const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 
 const createCategory = async (req, res) => {
   try {
+    console.log("Request Body:", req.body);
+    console.log("Request File:", req.file);
     const { title, description } = req.body;
     const { buffer, originalname, mimetype } = req.file;
     const fileName = originalname;
-    console.log("Request Body:", req.body);
-    console.log("Request File:", req.file);
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
@@ -62,8 +62,8 @@ const updateCategory = async (req, res) => {
     res.status(500).json({ message: "Error updating category", error });
   }
 };
-
 const deleteCategory = async (req, res) => {
+  console.log("Delete endpoint hit with ID:", req.params.id); // Debug log
   try {
     const category = await Category.findByIdAndDelete(req.params.id);
     if (!category) {
@@ -71,6 +71,7 @@ const deleteCategory = async (req, res) => {
     }
     res.status(200).json({ message: "Category deleted" });
   } catch (error) {
+    console.error("Delete error:", error); // Debug log
     res.status(500).json({ message: "Error deleting category", error });
   }
 };
