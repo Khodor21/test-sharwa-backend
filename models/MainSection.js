@@ -14,7 +14,18 @@ const mainSectionSchema = new mongoose.Schema({
     type: String,
     enum: ["Mono", "Duo", "Trio", "Quatro", "SlimMono"],
   },
-  images: [String], // Array of image URLs
+  banner_one:{
+    type:String
+  },
+  banner_two:{
+    type:String
+  },
+  banner_three:{
+    type:String
+  },
+  banner_four:{
+    type:String
+  }
 });
 
 // Add virtual field for products, not stored in the database
