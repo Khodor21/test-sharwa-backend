@@ -73,6 +73,10 @@ const deleteCategory = async (req, res) => {
       return handleResponse(res, null, 404, "Category not found");
     }
 
+    if (!category) {
+      return handleResponse(res, null, 404, "Category not found");
+    }
+
     handleResponse(res, null, 200, "Category deleted successfully");
   } catch (error) {
     handleError(res, error);
