@@ -20,7 +20,6 @@ const corsOptions = {
   credentials: true,
 };
 
-// PUSHING
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
@@ -35,7 +34,6 @@ app.use("/api", configurationRoutes);
 
 connectDB();
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
