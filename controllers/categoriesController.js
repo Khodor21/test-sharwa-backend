@@ -1,23 +1,22 @@
 const Category = require("../models/Category");
-
+const { handleResponse, handleError } = require("../utils/helpers");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
-
 const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 
+// Create a new category
 const createCategory = async (req, res) => {
   try {
-    console.log("Request Body:", req.body);
-    console.log("Request File:", req.file);
     const { title, description } = req.body;
-    const { buffer, originalname, mimetype } = req.file;
-    const fileName = originalname;
+
     if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      return handleResponse(res, null, 400, "Image is required");
     }
+
+    const { buffer, originalname, mimetype } = req.file;
     const imageUrl = await uploadImageToFirebase(
       buffer,
-      fileName,
+      originalname,
       mimetype,
       "categories"
     );
@@ -29,50 +28,54 @@ const createCategory = async (req, res) => {
     });
 
     await category.save();
-    res.status(201).json(category);
+    handleResponse(res, category, 201, "Category created successfully");
   } catch (error) {
-    res.status(500).json({ message: "Error creating category", error });
+    handleError(res, error);
   }
 };
 
+// Retrieve all categories
 const getAllCategories = async (req, res) => {
   try {
     const categories = await Category.find();
-    res.status(200).json(categories);
+    handleResponse(res, categories);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching categories", error });
+    handleError(res, error);
   }
 };
 
+// Update a category by ID
 const updateCategory = async (req, res) => {
   try {
     const { title, description } = req.body;
-    const category = await Category.findByIdAndUpdate(
-      req.params.id,
-      { title, description },
-      { new: true }
-    );
+    const category = await Category.findById(req.params.id);
 
     if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+      return handleResponse(res, null, 404, "Category not found");
     }
 
-    res.status(200).json(category);
+    category.title = title || category.title;
+    category.description = description || category.description;
+
+    await category.save();
+    handleResponse(res, category, 200, "Category updated successfully");
   } catch (error) {
-    res.status(500).json({ message: "Error updating category", error });
+    handleError(res, error);
   }
 };
+
+// Delete a category by ID
 const deleteCategory = async (req, res) => {
-  console.log("Delete endpoint hit with ID:", req.params.id); // Debug log
   try {
     const category = await Category.findByIdAndDelete(req.params.id);
+
     if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+      return handleResponse(res, null, 404, "Category not found");
     }
-    res.status(200).json({ message: "Category deleted" });
+
+    handleResponse(res, null, 200, "Category deleted successfully");
   } catch (error) {
-    console.error("Delete error:", error); // Debug log
-    res.status(500).json({ message: "Error deleting category", error });
+    handleError(res, error);
   }
 };
 

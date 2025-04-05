@@ -8,11 +8,14 @@ const {
   getProductById,
   updateProduct,
   deleteProduct,
+  searchProducts,
 } = require("../controllers/productController");
 
 router.post("/product", upload.array("images", 10), createProduct);
 
 router.get("/products", getAllProducts);
+
+router.get("/search", searchProducts);
 
 router.get("/products/:id", getProductById);
 

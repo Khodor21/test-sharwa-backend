@@ -253,6 +253,17 @@ const deleteProduct = async (req, res) => {
     return handleError(res, error);
   }
 };
+const searchProducts = async (req, res) => {
+  try {
+    const { query } = req.query;
+    const products = await Product.find({
+      title: { $regex: query, $options: "i" },
+    });
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching products", error });
+  }
+};
 
 module.exports = {
   createProduct,
@@ -260,5 +271,6 @@ module.exports = {
   getProductById,
   updateProduct,
   deleteProduct,
+  searchProducts,
   upload,
 };

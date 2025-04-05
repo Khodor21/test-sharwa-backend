@@ -1,22 +1,23 @@
 const express = require("express");
 const router = express.Router();
-const {
-  upload,
-  createMainSection,
-  getAllMainSections,
-  getMainSectionById,
-  updateMainSection,
-  deleteMainSection,
-} = require("../controllers/mainSectionController");
+const mainSectionController = require("../controllers/mainSectionController");
 
-router.post("/main-section", upload.array("images", 10), createMainSection);
+router.post(
+  "/main-sections",
+  mainSectionController.upload.array("images", 10),
+  mainSectionController.createMainSection
+);
 
-router.get("/main-section", getAllMainSections);
+router.get("/main-sections", mainSectionController.getAllMainSections);
 
-router.get("/main-section/:id", getMainSectionById);
+router.get("/main-sections/:id", mainSectionController.getMainSectionById);
 
-router.post("/main-section/:id", upload.array("images", 10), updateMainSection);
+router.post(
+  "/main-sections/:id",
+  mainSectionController.upload.array("images", 10),
+  mainSectionController.updateMainSection
+);
 
-router.delete("/main-section/:id", deleteMainSection);
+router.delete("/main-sections/:id", mainSectionController.deleteMainSection);
 
 module.exports = router;

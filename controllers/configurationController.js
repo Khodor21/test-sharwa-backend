@@ -1,6 +1,6 @@
 const Config = require("../models/Configuration");
 
-exports.saveConfig = async (req, res) => {
+const saveConfig = async (req, res) => {
   try {
     const { type, navbarType, titles, ruleType, paragraphs, contacts } =
       req.body;
@@ -31,7 +31,7 @@ exports.saveConfig = async (req, res) => {
   }
 };
 
-exports.getConfig = async (req, res) => {
+const getConfig = async (req, res) => {
   try {
     const { type } = req.params;
     const config = await Config.find({ type });
@@ -42,3 +42,4 @@ exports.getConfig = async (req, res) => {
       .json({ message: "Error fetching configuration", error: error.message });
   }
 };
+module.exports = { saveConfig, getConfig };
