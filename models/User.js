@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     phoneNumber: { type: String, required: true },
     district: { type: String, required: true },
     city: { type: String, required: true },
-    adress: { type: String, required: true },
+    address: { type: String },
   },
   { timestamps: true }
 );

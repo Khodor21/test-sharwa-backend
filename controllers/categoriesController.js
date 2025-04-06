@@ -8,13 +8,18 @@ const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 const createCategory = async (req, res) => {
   try {
     const { title, description } = req.body;
-    
+
     if (!req.file) {
       return handleResponse(res, null, 400, "Image is required");
     }
 
     const { buffer, originalname, mimetype } = req.file;
-    const imageUrl = await uploadImageToFirebase(buffer, originalname, mimetype, "categories");
+    const imageUrl = await uploadImageToFirebase(
+      buffer,
+      originalname,
+      mimetype,
+      "categories"
+    );
 
     const category = new Category({
       title,
@@ -63,11 +68,15 @@ const updateCategory = async (req, res) => {
 const deleteCategory = async (req, res) => {
   try {
     const category = await Category.findByIdAndDelete(req.params.id);
-    
+
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }
-    
+
+    if (!category) {
+      return handleResponse(res, null, 404, "Category not found");
+    }
+
     handleResponse(res, null, 200, "Category deleted successfully");
   } catch (error) {
     handleError(res, error);

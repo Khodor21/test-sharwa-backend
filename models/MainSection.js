@@ -28,13 +28,13 @@ const mainSectionSchema = new mongoose.Schema({
   },
 });
 
-// Add virtual field for products, not stored in the database
 mainSectionSchema.virtual("products", {
-  ref: "Product", // Reference the Product model
-  localField: "category_id", // The field in this schema to match the Product model
-  foreignField: "category_id", // The field in the Product model to match
-  match: { pin: true }, // Only products where pin is true
-  justOne: false, // False because we want an array of products
+  ref: "Product",
+  localField: "category_id",
+  foreignField: "category_id",
+  match: { pin: true },
+
+  justOne: false,
 });
 
 // Ensure virtuals are included when the model is converted to JSON
