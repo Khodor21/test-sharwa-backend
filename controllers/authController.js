@@ -19,14 +19,12 @@ const signup = async (req, res) => {
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
-    // Set token in the cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Only over HTTPS in production
-      sameSite: "Strict",
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "None",
     });
 
-    // Respond without sending the token in the body, as it's already in the cookie
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -48,7 +46,7 @@ const login = async (req, res) => {
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
+      sameSite: "None",
     });
 
     res.status(200).json({ message: "Login successful", token });
@@ -62,7 +60,7 @@ const logout = async (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
+      sameSite: "None",
       path: "/",
     });
     res.status(200).json({ message: "Logout successful" });
