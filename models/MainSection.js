@@ -14,16 +14,16 @@ const mainSectionSchema = new mongoose.Schema({
     type: String,
     enum: ["mono", "duo", "trio", "quatro", "slim-mono"],
   },
-  banner_one: {
+  banner_1: {
     type: String,
   },
-  banner_two: {
+  banner_2: {
     type: String,
   },
-  banner_three: {
+  banner_3: {
     type: String,
   },
-  banner_four: {
+  banner_4: {
     type: String,
   },
 });
