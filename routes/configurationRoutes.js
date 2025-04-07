@@ -11,3 +11,4 @@ router.get("/config/:type", getConfig);
 router.put("/config/:id", updateConfig);
 router.delete("/config/:id", deleteConfig);
 module.exports = router;
+// Just to push
