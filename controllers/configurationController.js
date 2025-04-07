@@ -63,4 +63,21 @@ const updateConfig = async (req, res) => {
   }
 };
 
-module.exports = { saveConfig, getConfig, updateConfig };
+const deleteConfig = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedConfig = await Config.findByIdAndDelete(id);
+
+    if (!deletedConfig) {
+      return res.status(404).json({ message: "Configuration not found" });
+    }
+
+    res.status(200).json({ message: "Configuration deleted successfully" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error deleting configuration", error: error.message });
+  }
+};
+
+module.exports = { saveConfig, getConfig, updateConfig, deleteConfig };

@@ -9,5 +9,5 @@ const {
 router.post("/config", saveConfig);
 router.get("/config/:type", getConfig);
 router.put("/config/:id", updateConfig);
-
+router.delete("/config/:id", deleteConfig);
 module.exports = router;
