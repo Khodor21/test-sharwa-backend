@@ -1,12 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const mainSectionController = require("../controllers/mainSectionController");
+const upload = require("../middlewares/uploadMiddleware.js");
 
-router.post(
-  "/main-sections",
-  mainSectionController.upload.array("images", 10),
-  mainSectionController.createMainSection
-);
+router.post("/main-sections", upload, mainSectionController.createMainSection);
 
 router.get("/main-sections", mainSectionController.getAllMainSections);
 

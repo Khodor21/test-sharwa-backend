@@ -12,18 +12,29 @@ const mainSectionSchema = new mongoose.Schema({
   },
   banners_type: {
     type: String,
-    enum: ["Mono", "Duo", "Trio", "Quatro", "SlimMono"],
+    enum: ["mono", "duo", "trio", "quatro", "slim-mono"],
   },
-  images: [String], 
+  banner_1: {
+    type: String,
+  },
+  banner_2: {
+    type: String,
+  },
+  banner_3: {
+    type: String,
+  },
+  banner_4: {
+    type: String,
+  },
 });
 
 mainSectionSchema.virtual("products", {
-  ref: "Product", 
+  ref: "Product",
   localField: "category_id",
   foreignField: "category_id",
-  match: { pin: true }, 
+  match: { pin: true },
 
-  justOne: false, 
+  justOne: false,
 });
 
 // Ensure virtuals are included when the model is converted to JSON

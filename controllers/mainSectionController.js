@@ -19,53 +19,43 @@ const createMainSection = async (req, res) => {
       return handleResponse(res, null, 400, "Category not found");
     }
 
-    // Process uploaded images
-    if (!req.files || req.files.length === 0) {
-      return handleResponse(res, null, 400, "No images uploaded");
-    }
+    // Initialize banners object
+    const banners = {};
 
-    // Determine number of images based on banners_type using switch statement
-    let numberOfImages;
-
-    switch (banners_type) {
-      case "Mono":
-      case "SlimMono":
-        numberOfImages = 1; // Mono/SlimMono - First image only
-        break;
-      case "Duo":
-        numberOfImages = 2; // Duo - First 2 images
-        break;
-      case "Trio":
-        numberOfImages = 3; // Trio - First 3 images
-        break;
-      case "Quatro":
-        numberOfImages = 4; // Quatro - First 4 images
-        break;
-      default:
-        return handleResponse(res, null, 400, "Invalid banners_type");
-    }
-
-    // Ensure there are enough images uploaded
-    if (req.files.length < numberOfImages) {
-      return handleResponse(
-        res,
-        null,
-        400,
-        `You need to upload at least ${numberOfImages} images for the selected banners_type.`
-      );
-    }
-
-    // Upload the images to Firebase
-    const uploadedImages = [];
-    for (let i = 0; i < numberOfImages; i++) {
-      const file = req.files[i];
-      const imageUrl = await uploadImageToFirebase(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
-        "main-sections"
-      );
-      uploadedImages.push(imageUrl);
+    // Process uploaded banner images if provided
+    if (req.files) {
+      if (req.files.banner_1) {
+        banners.banner_1 = await uploadImageToFirebase(
+          req.files.banner_1[0].buffer,
+          req.files.banner_1[0].originalname,
+          req.files.banner_1[0].mimetype,
+          "main-sections"
+        );
+      }
+      if (req.files.banner_2) {
+        banners.banner_2 = await uploadImageToFirebase(
+          req.files.banner_2[0].buffer,
+          req.files.banner_2[0].originalname,
+          req.files.banner_2[0].mimetype,
+          "main-sections"
+        );
+      }
+      if (req.files.banner_3) {
+        banners.banner_3 = await uploadImageToFirebase(
+          req.files.banner_3[0].buffer,
+          req.files.banner_3[0].originalname,
+          req.files.banner_3[0].mimetype,
+          "main-sections"
+        );
+      }
+      if (req.files.banner_4) {
+        banners.banner_4 = await uploadImageToFirebase(
+          req.files.banner_4[0].buffer,
+          req.files.banner_4[0].originalname,
+          req.files.banner_4[0].mimetype,
+          "main-sections"
+        );
+      }
     }
 
     // Create the MainSection object
@@ -73,11 +63,12 @@ const createMainSection = async (req, res) => {
       category_id,
       title,
       banners_type,
-      images: uploadedImages,
+      ...banners, // Spread banner fields into the object
     });
 
-    // Save the MainSection to the database
+    // Save to the database
     await newMainSection.save();
+
     handleResponse(
       res,
       newMainSection,
@@ -92,11 +83,36 @@ const createMainSection = async (req, res) => {
 // Retrieve all MainSections
 const getAllMainSections = async (req, res) => {
   try {
-    // Find all main sections and populate the 'products' field via the virtual
+    // Fetch all main sections and populate the 'category_id'
     const mainSections = await MainSection.find().populate("category_id");
 
-    // Send the response with the mainSections and their respective products
-    handleResponse(res, mainSections);
+    // Fetch all pinned products at once (to optimize queries)
+    const pinnedProducts = await Product.find({ pin: true });
+
+    // Format the response structure
+    const formattedSections = mainSections.map((section) => {
+      // Filter products that match the category_id of the section
+      const filteredProducts = pinnedProducts.filter(
+        (product) =>
+          product.category_id.toString() === section.category_id._id.toString()
+      );
+
+      return {
+        category: section.category_id, // Already populated
+        title: section.title,
+        banners_type: section.banners_type,
+        banners: {
+          banner_1: section.banner_1 || "",
+          banner_2: section.banner_2 || "",
+          banner_3: section.banner_3 || "",
+          banner_4: section.banner_4 || "",
+        },
+        products: filteredProducts, // Include filtered products
+      };
+    });
+
+    // Send the formatted response
+    handleResponse(res, formattedSections);
   } catch (error) {
     handleError(res, error);
   }
