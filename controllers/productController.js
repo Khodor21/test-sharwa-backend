@@ -1,12 +1,12 @@
-const Product = require("../models/Product");
-const Category = require("../models/Category");
-const mongoose = require("mongoose");
-const multer = require("multer");
+import Product from "../models/Product.js";
+import Category from "../models/Category.js";
+import mongoose from "mongoose";
+import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-const { uploadImageToFirebase } = require("../utils/firebaseUtils");
-const { handleResponse, handleError } = require("../utils/helpers");
+import { uploadImageToFirebase } from "../utils/firebaseUtils.js";
+import { handleResponse, handleError } from "../utils/helpers.js";
 
 // Create Product
 const createProduct = async (req, res) => {
@@ -124,6 +124,34 @@ const getProductById = async (req, res) => {
     return handleError(res, error);
   }
 };
+
+const getProductByCategoryId = async (req, res) => {
+  const { category_id } = req.query;
+
+  if (!mongoose.Types.ObjectId.isValid(category_id)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid Category Id",
+    });
+  }
+
+  try {
+    const products = await Product.find({ category_id });
+
+    if (!products || products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No products found for this category",
+      });
+    }
+
+    return handleResponse(res, products, 200, "Products found");
+  } catch (error) {
+    return handleError(res, error);
+  }
+};
+
+export default getProductByCategoryId;
 
 // Update Product
 const updateProduct = async (req, res) => {
@@ -265,12 +293,13 @@ const searchProducts = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   createProduct,
   getAllProducts,
   getProductById,
   updateProduct,
   deleteProduct,
   searchProducts,
+  getProductByCategoryId,
   upload,
 };
