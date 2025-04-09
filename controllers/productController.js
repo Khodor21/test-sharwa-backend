@@ -18,6 +18,7 @@ const createProduct = async (req, res) => {
     quantity,
     price,
     target_audience,
+    related_products,
   } = req.body;
   console.log("BODY:", req.body);
   console.log("FILES:", req.files);
@@ -69,7 +70,7 @@ const createProduct = async (req, res) => {
       title,
       description,
       category_id,
-      related_products: [],
+      related_products,
       pin,
       main_image: mainImageUrl,
       images: additionalImages,
