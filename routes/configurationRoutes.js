@@ -4,11 +4,13 @@ const {
   saveConfig,
   getConfig,
   updateConfig,
+  deleteConfig,
+  upload,
 } = require("../controllers/configurationController");
 
-router.post("/config", saveConfig);
+router.post("/config", upload.single("file"), saveConfig);
 router.get("/config/:type", getConfig);
 router.put("/config/:id", updateConfig);
 router.delete("/config/:id", deleteConfig);
+
 module.exports = router;
-// Just to push

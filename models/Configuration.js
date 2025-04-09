@@ -1,16 +1,22 @@
 const mongoose = require("mongoose");
 
-const configSchema = new mongoose.Schema({
-  type: { type: String, required: true, enum: ["navbar", "rules", "contact"] },
-  navbarType: { type: String, enum: ["top-navbar", "bottom-navbar"] },
-  titles: [{ type: String }],
-
+const ruleSchema = new mongoose.Schema({
   ruleType: {
     type: String,
     enum: ["about-us", "privacy-policy", "terms-of-services"],
+    required: true,
   },
-  paragraphs: { type: String },
+  paragraphs: { type: String, required: true },
   image: { type: String },
+});
+
+const configSchema = new mongoose.Schema({
+  type: { type: String, enum: ["navbar", "rules", "contact"] },
+  navbarType: { type: String, enum: ["top-navbar", "bottom-navbar"] },
+  titles: [{ type: String }],
+
+  rules: [ruleSchema],
+
   contacts: [
     {
       title: { type: String },
