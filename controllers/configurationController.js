@@ -113,18 +113,24 @@ const getConfig = async (req, res) => {
 };
 const updateConfig = async (req, res) => {
   try {
-    const { id } = req.params;
-    const updatedConfig = await Config.findByIdAndUpdate(id, req.body, {
+    console.log("Type from request params:", req.params.type); // Log the type from the URL
+    console.log("Request Body:", req.body); // Log the request body
+
+    const { type } = req.params; // Extract the type from the URL params
+    const updatedConfig = await Config.findOneAndUpdate({ type }, req.body, {
       new: true,
     });
+
     if (!updatedConfig) {
       return res.status(404).json({ message: "Configuration not found" });
     }
+
     res.status(200).json({
       message: "Configuration updated successfully",
       data: updatedConfig,
     });
   } catch (error) {
+    console.error(error);
     res
       .status(500)
       .json({ message: "Error updating configuration", error: error.message });

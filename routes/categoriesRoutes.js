@@ -12,7 +12,7 @@ router.post("/category", upload.single("image"), createCategory);
 
 router.get("/categories", getAllCategories);
 
-router.put("/category/:id", updateCategory);
+router.put("/category/:type", updateCategory);
 
 router.delete("/category/:id", deleteCategory);
 
