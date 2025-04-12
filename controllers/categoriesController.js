@@ -3,6 +3,7 @@ const { handleResponse, handleError } = require("../utils/helpers");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 const { uploadImageToFirebase } = require("../utils/firebaseUtils");
+const { default: mongoose } = require("mongoose");
 
 // Create a new category
 const createCategory = async (req, res) => {
@@ -47,7 +48,7 @@ const getAllCategories = async (req, res) => {
 // Update a category by ID
 const updateCategory = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { type: id } = req.params;
     const { title, description } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
