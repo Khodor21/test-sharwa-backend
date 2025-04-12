@@ -47,9 +47,14 @@ const getAllCategories = async (req, res) => {
 // Update a category by ID
 const updateCategory = async (req, res) => {
   try {
+    const { id } = req.params;
     const { title, description } = req.body;
-    const category = await Category.findById(req.params.id);
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return handleResponse(res, null, 400, "Invalid category ID");
+    }
+
+    const category = await Category.findById(id);
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }

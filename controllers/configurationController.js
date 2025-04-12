@@ -229,10 +229,7 @@ const getConfig = async (req, res) => {
 };
 const updateConfig = async (req, res) => {
   try {
-    console.log("Type from request params:", req.params.type); // Log the type from the URL
-    console.log("Request Body:", req.body); // Log the request body
-
-    const { type } = req.params; // Extract the type from the URL params
+    const { type } = req.params; 
     const updatedConfig = await Config.findOneAndUpdate({ type }, req.body, {
       new: true,
     });
