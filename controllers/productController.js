@@ -1,12 +1,12 @@
-import Product from "../models/Product.js";
-import Category from "../models/Category.js";
-import mongoose from "mongoose";
-import multer from "multer";
+const Product = require("../models/Product.js");
+const Category = require("../models/Category.js");
+const mongoose = require("mongoose");
+const multer = require("multer");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-import { uploadImageToFirebase } from "../utils/firebaseUtils.js";
-import { handleResponse, handleError } from "../utils/helpers.js";
+const { uploadImageToFirebase } = require("../utils/firebaseUtils.js");
+const { handleResponse, handleError } = require("../utils/helpers.js");
 
 // Create Product
 const createProduct = async (req, res) => {
@@ -152,8 +152,6 @@ const getProductByCategoryId = async (req, res) => {
   }
 };
 
-export default getProductByCategoryId;
-
 // Update Product
 const updateProduct = async (req, res) => {
   const { id } = req.params;
@@ -293,7 +291,7 @@ const searchProducts = async (req, res) => {
   }
 };
 
-export {
+module.exports = {
   createProduct,
   getAllProducts,
   getProductById,

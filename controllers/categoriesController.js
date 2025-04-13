@@ -3,6 +3,7 @@ const { handleResponse, handleError } = require("../utils/helpers");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 const { uploadImageToFirebase } = require("../utils/firebaseUtils");
+const { default: mongoose } = require("mongoose");
 
 // Create a new category
 const createCategory = async (req, res) => {
@@ -47,9 +48,14 @@ const getAllCategories = async (req, res) => {
 // Update a category by ID
 const updateCategory = async (req, res) => {
   try {
+    const { type: id } = req.params;
     const { title, description } = req.body;
-    const category = await Category.findById(req.params.id);
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return handleResponse(res, null, 400, "Invalid category ID");
+    }
+
+    const category = await Category.findById(id);
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }
