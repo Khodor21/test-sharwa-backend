@@ -94,7 +94,7 @@ const getAllMainSections = async (req, res) => {
       // Filter products that match the category_id of the section
       const filteredProducts = pinnedProducts.filter(
         (product) =>
-          product.category_id.toString() === section.category_id._id.toString()
+          product.category_id.toString() === section.category_id?._id.toString()
       );
 
       return {
