@@ -23,6 +23,7 @@ const signup = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "None",
+      maxAge: 1000 * 60 * 60 * 24 * 365,
     });
 
     res.status(201).json({ message: "User created successfully" });
@@ -47,6 +48,7 @@ const login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "None",
+      maxAge: 1000 * 60 * 60 * 24 * 365,
     });
 
     res.status(200).json({ message: "Login successful", token });
@@ -99,6 +101,17 @@ const deleteAccount = async (req, res) => {
       secure: process.env.NODE_ENV === "production",
     });
     res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteUserByAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await User.findByIdAndDelete(userId);
+    res.status(200).json({ message: "User deleted by admin successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -168,4 +181,5 @@ module.exports = {
   deleteAccount,
   updateProfile,
   updateUserByAdmin,
+  deleteUserByAdmin,
 };

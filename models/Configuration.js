@@ -12,7 +12,6 @@ const ruleSchema = new mongoose.Schema({
 
 const configSchema = new mongoose.Schema({
   type: { type: String, enum: ["navbar", "rules", "contact", "hero"] },
-  heroImages: [{ type: String }],
   navbarType: { type: String, enum: ["top-navbar", "bottom-navbar"] },
   titles: [{ type: String }],
 
