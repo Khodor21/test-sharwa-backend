@@ -17,11 +17,14 @@ const createProduct = async (req, res) => {
     pin,
     quantity,
     price,
+    discount, // ✅ added
     target_audience,
     related_products,
   } = req.body;
+
   console.log("BODY:", req.body);
   console.log("FILES:", req.files);
+
   try {
     const category = await Category.findById(category_id);
     if (!category) {
@@ -31,20 +34,18 @@ const createProduct = async (req, res) => {
       });
     }
 
-    if (!req.files || req.files.length === 0) {
+    // Expecting files in form-data with keys: main_image and images[]
+    const mainImageFile = req.files?.main_image?.[0];
+    const additionalImageFiles = req.files?.images || [];
+
+    if (!mainImageFile) {
       return res.status(400).json({
         success: false,
-        message: "No images uploaded",
+        message: "Main image is required",
       });
     }
 
-    if (!req.body || !req.files) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing form data or files",
-      });
-    }
-    const mainImageFile = req.files[0];
+    // Upload main image
     const mainImageUrl = await uploadImageToFirebase(
       mainImageFile.buffer,
       mainImageFile.originalname,
@@ -54,8 +55,7 @@ const createProduct = async (req, res) => {
 
     // Upload additional images
     const additionalImages = [];
-    for (let i = 1; i < req.files.length; i++) {
-      const file = req.files[i];
+    for (const file of additionalImageFiles) {
       const imageUrl = await uploadImageToFirebase(
         file.buffer,
         file.originalname,
@@ -76,10 +76,10 @@ const createProduct = async (req, res) => {
       images: additionalImages,
       quantity,
       price,
+      discount, // ✅ added here
       target_audience,
     });
 
-    // Save the product to the database
     await product.save();
     return handleResponse(res, product, 201, "Product created successfully");
   } catch (error) {
@@ -155,106 +155,87 @@ const getProductByCategoryId = async (req, res) => {
 // Update Product
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Product ID",
-    });
-  }
-
   const {
     title,
     description,
     category_id,
-    related_products,
     pin,
     quantity,
     price,
+    discount,
     target_audience,
+    related_products,
   } = req.body;
 
-  try {
-    // Validate that the category_id (if provided) exists
-    if (category_id) {
-      const category = await Category.findById(category_id);
-      if (!category) {
-        return res.status(400).json({
-          success: false,
-          message: "Category not found",
-        });
-      }
-    }
+  console.log("BODY:", req.body);
+  console.log("FILES:", req.files);
 
-    // Fetch the existing product
-    const existingProduct = await Product.findById(id);
-    if (!existingProduct) {
+  try {
+    const product = await Product.findById(id);
+    if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
       });
     }
 
-    // Initialize updated product data
-    const updatedData = {
-      title: title || existingProduct.title,
-      description: description || existingProduct.description,
-      category_id: category_id || existingProduct.category_id,
-      related_products: related_products || existingProduct.related_products,
-      pin: pin !== undefined ? pin : existingProduct.pin,
-      quantity: quantity !== undefined ? quantity : existingProduct.quantity,
-      price: price !== undefined ? price : existingProduct.price,
-      target_audience: target_audience || existingProduct.target_audience,
-    };
+    // Update basic fields if present
+    if (title) product.title = title;
+    if (description) product.description = description;
+    if (category_id) product.category_id = category_id;
+    if (typeof pin !== "undefined") product.pin = pin;
+    if (quantity) product.quantity = quantity;
+    if (price) product.price = price;
+    if (discount) product.discount = discount;
+    if (target_audience) product.target_audience = target_audience;
 
-    // Handle uploaded images if provided
-    if (req.files && req.files.length > 0) {
-      // Upload new main image
-      const mainImageFile = req.files[0];
+    // Handle related_products (optional)
+    if (related_products) {
+      try {
+        product.related_products = JSON.parse(related_products);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid format for related_products",
+        });
+      }
+    }
+
+    // Handle main_image update (if provided)
+    const mainImageFile = req.files?.main_image?.[0];
+    if (mainImageFile) {
       const mainImageUrl = await uploadImageToFirebase(
         mainImageFile.buffer,
         mainImageFile.originalname,
         mainImageFile.mimetype,
         "products"
       );
+      product.main_image = mainImageUrl;
+    }
 
-      updatedData.main_image = mainImageUrl;
-
-      // Upload new additional images
-      const additionalImages = [];
-      for (let i = 1; i < req.files.length; i++) {
-        const file = req.files[i];
+    // Handle additional images update (if provided)
+    const additionalImageFiles = req.files?.images || [];
+    if (additionalImageFiles.length > 0) {
+      const newImages = [];
+      for (const file of additionalImageFiles) {
         const imageUrl = await uploadImageToFirebase(
           file.buffer,
           file.originalname,
           file.mimetype,
           "products"
         );
-        additionalImages.push(imageUrl);
+        newImages.push(imageUrl);
       }
-
-      updatedData.images = additionalImages;
-    } else {
-      // If no new images are provided, retain existing images
-      updatedData.main_image = existingProduct.main_image;
-      updatedData.images = existingProduct.images;
+      product.images = newImages;
     }
 
-    // Update the product
-    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
-      new: true,
-    });
-
-    return handleResponse(
-      res,
-      updatedProduct,
-      200,
-      "Product updated successfully"
-    );
+    await product.save();
+    return handleResponse(res, product, 200, "Product updated successfully");
   } catch (error) {
     return handleError(res, error);
   }
 };
+
 // Delete Product
 const deleteProduct = async (req, res) => {
   const { id } = req.params;
