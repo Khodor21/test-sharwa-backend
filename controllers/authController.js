@@ -4,11 +4,13 @@ const User = require("../models/User");
 
 const signup = async (req, res) => {
   try {
-    const { name, password, phoneNumber, district, city, address } = req.body;
+    const { name, email, password, phoneNumber, district, city, address } =
+      req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
       name,
+      email,
       password: hashedPassword,
       phoneNumber,
       district,
