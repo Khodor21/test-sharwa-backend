@@ -6,6 +6,16 @@ const signup = async (req, res) => {
   try {
     const { name, email, password, phoneNumber, district, city, address } =
       req.body;
+
+    const emailExists = await User.findOne({ email });
+    if (emailExists) {
+      return res.status(400).json({ message: "Email already in use" });
+    }
+
+    const phoneExists = await User.findOne({ phoneNumber });
+    if (phoneExists) {
+      return res.status(400).json({ message: "Phone number already in use" });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
