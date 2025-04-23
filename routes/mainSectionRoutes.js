@@ -7,11 +7,14 @@ router.post("/main-sections", upload, mainSectionController.createMainSection);
 
 router.get("/main-sections", mainSectionController.getAllMainSections);
 
-router.get("/main-sections/:id", mainSectionController.getMainSectionById);
+router.get(
+  "/main-sections/:section_id",
+  mainSectionController.getMainSectionById
+);
 
 router.post(
-  "/main-sections/:id",
-  mainSectionController.upload.array("images", 10),
+  "/main-sections/:section_id",
+  upload,
   mainSectionController.updateMainSection
 );
 
