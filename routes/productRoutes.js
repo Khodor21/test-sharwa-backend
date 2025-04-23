@@ -6,7 +6,7 @@ const {
   createProduct,
   getAllProducts,
   getProductById,
-  getProductByCategoryId,
+  getProductsByCategoryTitle,
   updateProduct,
   deleteProduct,
   searchProducts,
@@ -22,7 +22,7 @@ router.get("/products/:id", getProductById);
 
 router.post("/products/:id", upload.array("images", 10), updateProduct);
 
-router.get("/productsByCategory", getProductByCategoryId);
+router.get("/productsByCategory", getProductsByCategoryTitle);
 
 router.delete("/products/:id", deleteProduct);
 
