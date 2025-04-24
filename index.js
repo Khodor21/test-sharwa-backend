@@ -9,6 +9,7 @@ const mainSectionRoutes = require("./routes/mainSectionRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const configurationRoutes = require("./routes/configurationRoutes");
 const heroRoutes = require("./routes/heroRoutes");
+
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const cors = require("cors");

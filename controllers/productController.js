@@ -126,29 +126,29 @@ const getProductById = async (req, res) => {
   }
 };
 
-const getProductByCategoryId = async (req, res) => {
-  const { category_id } = req.query;
-
-  if (!mongoose.Types.ObjectId.isValid(category_id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Category Id",
-    });
-  }
+const getProductsByCategoryTitle = async (req, res) => {
+  const { title } = req.query;
 
   try {
-    const products = await Product.find({ category_id });
+    const category = await Category.findOne({
+      title: new RegExp(`^${title}$`, "i"),
+    });
 
-    if (!products || products.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No products found for this category",
-      });
+    if (!category) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
 
-    return handleResponse(res, products, 200, "Products found");
+    const products = await Product.find({ category_id: category._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Products found",
+      data: products,
+    });
   } catch (error) {
-    return handleError(res, error);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -260,12 +260,20 @@ const deleteProduct = async (req, res) => {
     return handleError(res, error);
   }
 };
+
+// Search Product
 const searchProducts = async (req, res) => {
   try {
-    const { query } = req.query;
+    const searchTerm = req.query.query;
+
+    if (typeof searchTerm !== "string" || !searchTerm.trim()) {
+      return res.status(400).json({ message: "Invalid query parameter" });
+    }
+
     const products = await Product.find({
-      title: { $regex: query, $options: "i" },
+      title: { $regex: searchTerm, $options: "i" },
     });
+
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: "Error fetching products", error });
@@ -279,6 +287,6 @@ module.exports = {
   updateProduct,
   deleteProduct,
   searchProducts,
-  getProductByCategoryId,
+  getProductsByCategoryTitle,
   upload,
 };
