@@ -27,23 +27,20 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  products: {
-    type: [
-      {
-        product_id: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
-        quantity: {
-          type: Number,
-          required: true,
-          default: 1,
-        },
+  products: [
+    {
+      product_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+        required: true,
       },
-    ],
-    required: true,
-  },
+      quantity: {
+        type: Number,
+        required: true,
+        default: 1,
+      },
+    },
+  ],
   extra_fees: {
     type: String,
     required: true,
@@ -52,21 +49,10 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  order_status: {
-    type: [
-      {
-        code: { type: Number },
-        status: { type: String },
-        check: { type: Boolean, default: false },
-        date: { type: String, default: "-" },
-      },
-    ],
-    default: [
-      { code: 1, status: "Order Placed", check: true, date: "-" },
-      { code: 2, status: "Order Confirmed", check: false, date: "-" },
-      { code: 3, status: "Shipped", check: false, date: "-" },
-      { code: 4, status: "Delivered", check: false, date: "--" },
-    ],
+  status: {
+    type: String,
+    enum: ["pending", "accepted", "rejected"],
+    default: "pending",
   },
 });
 

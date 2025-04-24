@@ -7,8 +7,25 @@ const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .populate("user_id", "name email")
-      .populate("products");
-    handleResponse(res, orders);
+      .populate("products.product_id");
+
+    // Transform products: replace product_id with product
+    const transformedOrders = orders.map((order) => {
+      const transformedProducts = order.products.map((p) => {
+        return {
+          ...p._doc,
+          product: p.product_id, // new key
+          product_id: undefined, // remove old key
+        };
+      });
+
+      return {
+        ...order._doc,
+        products: transformedProducts,
+      };
+    });
+
+    handleResponse(res, transformedOrders);
   } catch (error) {
     handleError(res, error);
   }
@@ -112,43 +129,25 @@ const createOrder = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { code, check, date } = req.body;
+    const { status } = req.body;
+
+    const validStatuses = ["accepted", "rejected"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status provided" });
+    }
 
     const order = await Order.findById(id);
     if (!order) {
-      return handleResponse(res, null, 404, "Order not found");
+      return res.status(404).json({ message: "Order not found" });
     }
 
-    const currentStatusIndex = order.order_status.findIndex(
-      (status) => status.code === code
-    );
-
-    if (currentStatusIndex === -1) {
-      return handleResponse(res, null, 404, "Status code not found in order");
-    }
-
-    // Check if the previous status in the sequence is unchecked
-    if (currentStatusIndex > 0) {
-      const previousStatus = order.order_status[currentStatusIndex - 1];
-      if (!previousStatus.check) {
-        return handleResponse(
-          res,
-          null,
-          400,
-          `Cannot update status "${order.order_status[currentStatusIndex].status}" because the previous status "${previousStatus.status}" is not checked`
-        );
-      }
-    }
-
-    // Update the specific status
-    const statusToUpdate = order.order_status[currentStatusIndex];
-    if (check !== undefined) statusToUpdate.check = check;
-    if (date) statusToUpdate.date = date;
-
+    order.status = status;
     await order.save();
-    handleResponse(res, order);
+
+    res.status(200).json({ message: "Order status updated", data: order });
   } catch (error) {
-    handleError(res, error);
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
