@@ -94,10 +94,11 @@ const getAllMainSections = async (req, res) => {
       // Filter products that match the category_id of the section
       const filteredProducts = pinnedProducts.filter(
         (product) =>
-          product.category_id.toString() === section.category_id._id.toString()
+          product.category_id.toString() === section.category_id?._id.toString()
       );
 
       return {
+        id: section._id,
         category: section.category_id, // Already populated
         title: section.title,
         banners_type: section.banners_type,
@@ -121,20 +122,42 @@ const getAllMainSections = async (req, res) => {
 // Retrieve a specific MainSection by ID
 const getMainSectionById = async (req, res) => {
   try {
-    const { id } = req.params; // Get section ID from the request parameters
+    const { section_id } = req.params;
 
-    // Find the MainSection by ID and populate the 'category_id' and 'products' virtual field
-    const mainSection = await MainSection.findById(id)
-      .populate("category_id")
-      .populate("products");
+    // Fetch the main section by ID and populate category
+    const section = await MainSection.findById(section_id).populate(
+      "category_id"
+    );
 
-    // If no MainSection found, return an error
-    if (!mainSection) {
+    if (!section) {
       return handleResponse(res, null, 404, "MainSection not found");
     }
 
-    // Send the response with the MainSection and its associated products
-    handleResponse(res, mainSection);
+    // Fetch all pinned products (to filter later)
+    const pinnedProducts = await Product.find({ pin: true });
+
+    // Filter products that match the category_id of the section
+    const filteredProducts = pinnedProducts.filter(
+      (product) =>
+        product.category_id.toString() === section.category_id?._id.toString()
+    );
+
+    // Format the response structure
+    const formattedSection = {
+      category: section.category_id,
+      title: section.title,
+      banners_type: section.banners_type,
+      banners: {
+        banner_1: section.banner_1 || "",
+        banner_2: section.banner_2 || "",
+        banner_3: section.banner_3 || "",
+        banner_4: section.banner_4 || "",
+      },
+      products: filteredProducts,
+    };
+
+    // Send the formatted response
+    handleResponse(res, formattedSection);
   } catch (error) {
     handleError(res, error);
   }
@@ -143,83 +166,67 @@ const getMainSectionById = async (req, res) => {
 // Update a MainSection by ID
 const updateMainSection = async (req, res) => {
   try {
-    const { id } = req.params; // Get the ID from request params
-    const { category_id, title, banners_type } = req.body; // Extract other fields from request body
+    const { section_id } = req.params;
+    const { category_id, title, banners_type } = req.body;
 
-    // Find the existing MainSection by ID
-    const mainSection = await MainSection.findById(id);
+    // Find the section to update
+    const mainSection = await MainSection.findById(section_id);
     if (!mainSection) {
       return handleResponse(res, null, 404, "MainSection not found");
     }
 
-    // Validate that category_id exists (and ensure it's the same as before or changed)
+    // Validate the new category_id if provided
     if (category_id) {
       const category = await Category.findById(category_id);
       if (!category) {
         return handleResponse(res, null, 400, "Category not found");
       }
+      mainSection.category_id = category_id;
     }
 
-    // Process uploaded images, if any
-    let uploadedImages = mainSection.images; // Keep the current images in case no new images are uploaded
+    // Update title and banners_type if provided
+    if (title) mainSection.title = title;
+    if (banners_type) mainSection.banners_type = banners_type;
 
-    if (req.files && req.files.length > 0) {
-      // Determine number of images based on banners_type using switch statement
-      let numberOfImages;
-
-      switch (
-        banners_type ||
-        mainSection.banners_type // Use the existing banners_type if not provided
-      ) {
-        case "Mono":
-        case "SlimMono":
-          numberOfImages = 1; // Mono/SlimMono - First image only
-          break;
-        case "Duo":
-          numberOfImages = 2; // Duo - First 2 images
-          break;
-        case "Trio":
-          numberOfImages = 3; // Trio - First 3 images
-          break;
-        case "Quatro":
-          numberOfImages = 4; // Quatro - First 4 images
-          break;
-        default:
-          return handleResponse(res, null, 400, "Invalid banners_type");
-      }
-
-      // Ensure there are enough images uploaded
-      if (req.files.length < numberOfImages) {
-        return handleResponse(
-          res,
-          null,
-          400,
-          `You need to upload at least ${numberOfImages} images for the selected banners_type.`
-        );
-      }
-
-      // Upload the images to Firebase (if uploading new images)
-      uploadedImages = [];
-      for (let i = 0; i < numberOfImages; i++) {
-        const file = req.files[i];
-        const imageUrl = await uploadImageToFirebase(
-          file.buffer,
-          file.originalname,
-          file.mimetype,
+    // Update banner images if new files are uploaded
+    if (req.files) {
+      if (req.files.banner_1) {
+        mainSection.banner_1 = await uploadImageToFirebase(
+          req.files.banner_1[0].buffer,
+          req.files.banner_1[0].originalname,
+          req.files.banner_1[0].mimetype,
           "main-sections"
         );
-        uploadedImages.push(imageUrl);
+      }
+      if (req.files.banner_2) {
+        mainSection.banner_2 = await uploadImageToFirebase(
+          req.files.banner_2[0].buffer,
+          req.files.banner_2[0].originalname,
+          req.files.banner_2[0].mimetype,
+          "main-sections"
+        );
+      }
+      if (req.files.banner_3) {
+        mainSection.banner_3 = await uploadImageToFirebase(
+          req.files.banner_3[0].buffer,
+          req.files.banner_3[0].originalname,
+          req.files.banner_3[0].mimetype,
+          "main-sections"
+        );
+      }
+      if (req.files.banner_4) {
+        mainSection.banner_4 = await uploadImageToFirebase(
+          req.files.banner_4[0].buffer,
+          req.files.banner_4[0].originalname,
+          req.files.banner_4[0].mimetype,
+          "main-sections"
+        );
       }
     }
 
-    // Update the MainSection object with provided or existing values
-    mainSection.category_id = category_id || mainSection.category_id;
-    mainSection.title = title || mainSection.title;
-    mainSection.banners_type = banners_type || mainSection.banners_type;
-    mainSection.images = uploadedImages; // Update images with the new ones or keep old ones
-
-    // Save the updated MainSection to the database
+    // Save the updated document
     await mainSection.save();
+
     handleResponse(res, mainSection, 200, "MainSection updated successfully");
   } catch (error) {
     handleError(res, error);

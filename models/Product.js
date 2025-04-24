@@ -23,6 +23,10 @@ const productSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  discount: {
+    type: String,
+    required: false,
+  },
   target_audience: {
     type: String,
     required: true,
