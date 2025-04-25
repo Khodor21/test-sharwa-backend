@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
-const {
-  createOrder,
-  getAllOrders,
-  getOrderById,
-  updateOrderStatus,
-} = require("../controllers/orderController");
 
-router.post("/orders", createOrder);
-router.get("/orders", getAllOrders);
-router.get("/order/:id", getOrderById);
-router.post("/orders/update-status/:id", updateOrderStatus);
+const orderController = require("../controllers/orderController");
+
+//try to fix github error
+
+router.post("/order", orderController.createOrder);
+
+router.get("/orders", orderController.getAllOrders);
+
+router.get("/orders/:id", orderController.getOrderById);
+
+router.post("/orders/update-status/:id", orderController.updateOrderStatus);
 
 module.exports = router;

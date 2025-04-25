@@ -37,7 +37,7 @@ const getOrderById = async (req, res) => {
     const { id } = req.params;
     const order = await Order.findById(id)
       .populate("user_id", "name email")
-      .populate("products");
+      .populate("products.product_id");
 
     if (!order) {
       return handleResponse(res, null, 404, "Order not found");
