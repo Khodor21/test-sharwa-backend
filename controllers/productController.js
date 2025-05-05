@@ -8,6 +8,19 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { uploadImageToFirebase } = require("../utils/firebaseUtils.js");
 const { handleResponse, handleError } = require("../utils/helpers.js");
 
+// Utility to calculate final price
+const calculateFinalPrice = (price, discount, discountType) => {
+  const numericPrice = parseFloat(price) || 0;
+  const numericDiscount = parseFloat(discount) || 0;
+
+  if (discountType === "percentage") {
+    return numericPrice - (numericPrice * numericDiscount) / 100;
+  } else if (discountType === "value") {
+    return numericPrice - numericDiscount;
+  }
+  return numericPrice;
+};
+
 // Create Product
 const createProduct = async (req, res) => {
   const {
@@ -17,35 +30,29 @@ const createProduct = async (req, res) => {
     pin,
     quantity,
     price,
-    discount, // ✅ added
+    discount,
+    discount_type, // ✅ new
     target_audience,
     related_products,
   } = req.body;
 
-  console.log("BODY:", req.body);
-  console.log("FILES:", req.files);
-
   try {
     const category = await Category.findById(category_id);
     if (!category) {
-      return res.status(400).json({
-        success: false,
-        message: "Category not found",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Category not found" });
     }
 
-    // Expecting files in form-data with keys: main_image and images[]
     const mainImageFile = req.files?.main_image?.[0];
     const additionalImageFiles = req.files?.images || [];
 
     if (!mainImageFile) {
-      return res.status(400).json({
-        success: false,
-        message: "Main image is required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Main image is required" });
     }
 
-    // Upload main image
     const mainImageUrl = await uploadImageToFirebase(
       mainImageFile.buffer,
       mainImageFile.originalname,
@@ -53,7 +60,6 @@ const createProduct = async (req, res) => {
       "products"
     );
 
-    // Upload additional images
     const additionalImages = [];
     for (const file of additionalImageFiles) {
       const imageUrl = await uploadImageToFirebase(
@@ -65,7 +71,6 @@ const createProduct = async (req, res) => {
       additionalImages.push(imageUrl);
     }
 
-    // Create the new product
     const product = new Product({
       title,
       description,
@@ -76,12 +81,26 @@ const createProduct = async (req, res) => {
       images: additionalImages,
       quantity,
       price,
-      discount, // ✅ added here
+      discount,
+      discount_type,
       target_audience,
     });
 
     await product.save();
-    return handleResponse(res, product, 201, "Product created successfully");
+
+    const finalPrice = calculateFinalPrice(
+      product.price,
+      product.discount,
+      product.discount_type
+    );
+    const productData = { ...product.toObject(), final_price: finalPrice };
+
+    return handleResponse(
+      res,
+      productData,
+      201,
+      "Product created successfully"
+    );
   } catch (error) {
     return handleError(res, error);
   }
@@ -93,7 +112,17 @@ const getAllProducts = async (req, res) => {
     const products = await Product.find()
       .populate("category_id")
       .populate("related_products");
-    return handleResponse(res, products, 200, "Products found");
+
+    const updatedProducts = products.map((product) => {
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
+      return { ...product.toObject(), final_price: finalPrice };
+    });
+
+    return handleResponse(res, updatedProducts, 200, "Products found");
   } catch (error) {
     return handleError(res, error);
   }
@@ -104,23 +133,30 @@ const getProductById = async (req, res) => {
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Product ID",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid Product ID" });
   }
 
   try {
     const product = await Product.findById(id)
       .populate("category_id")
       .populate("related_products");
+
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    return handleResponse(res, product, 200, "Product found");
+
+    const finalPrice = calculateFinalPrice(
+      product.price,
+      product.discount,
+      product.discount_type
+    );
+    const productData = { ...product.toObject(), final_price: finalPrice };
+
+    return handleResponse(res, productData, 200, "Product found");
   } catch (error) {
     return handleError(res, error);
   }
@@ -142,10 +178,19 @@ const getProductsByCategoryTitle = async (req, res) => {
 
     const products = await Product.find({ category_id: category._id });
 
+    const updatedProducts = products.map((product) => {
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
+      return { ...product.toObject(), final_price: finalPrice };
+    });
+
     return res.status(200).json({
       success: true,
       message: "Products found",
-      data: products,
+      data: updatedProducts,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Server error" });
@@ -163,23 +208,19 @@ const updateProduct = async (req, res) => {
     quantity,
     price,
     discount,
+    discount_type, // ✅ added
     target_audience,
     related_products,
   } = req.body;
 
-  console.log("BODY:", req.body);
-  console.log("FILES:", req.files);
-
   try {
     const product = await Product.findById(id);
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
-    // Update basic fields if present
     if (title) product.title = title;
     if (description) product.description = description;
     if (category_id) product.category_id = category_id;
@@ -187,21 +228,22 @@ const updateProduct = async (req, res) => {
     if (quantity) product.quantity = quantity;
     if (price) product.price = price;
     if (discount) product.discount = discount;
+    if (discount_type) product.discount_type = discount_type;
     if (target_audience) product.target_audience = target_audience;
 
-    // Handle related_products (optional)
     if (related_products) {
       try {
         product.related_products = JSON.parse(related_products);
       } catch (err) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid format for related_products",
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Invalid format for related_products",
+          });
       }
     }
 
-    // Handle main_image update (if provided)
     const mainImageFile = req.files?.main_image?.[0];
     if (mainImageFile) {
       const mainImageUrl = await uploadImageToFirebase(
@@ -213,7 +255,6 @@ const updateProduct = async (req, res) => {
       product.main_image = mainImageUrl;
     }
 
-    // Handle additional images update (if provided)
     const additionalImageFiles = req.files?.images || [];
     if (additionalImageFiles.length > 0) {
       const newImages = [];
@@ -230,7 +271,20 @@ const updateProduct = async (req, res) => {
     }
 
     await product.save();
-    return handleResponse(res, product, 200, "Product updated successfully");
+
+    const finalPrice = calculateFinalPrice(
+      product.price,
+      product.discount,
+      product.discount_type
+    );
+    const productData = { ...product.toObject(), final_price: finalPrice };
+
+    return handleResponse(
+      res,
+      productData,
+      200,
+      "Product updated successfully"
+    );
   } catch (error) {
     return handleError(res, error);
   }
@@ -241,20 +295,19 @@ const deleteProduct = async (req, res) => {
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Product ID",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid Product ID" });
   }
 
   try {
     const product = await Product.findByIdAndDelete(id);
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
+
     return handleResponse(res, null, 200, "Product deleted successfully");
   } catch (error) {
     return handleError(res, error);
@@ -274,7 +327,16 @@ const searchProducts = async (req, res) => {
       title: { $regex: searchTerm, $options: "i" },
     });
 
-    res.json(products);
+    const updatedProducts = products.map((product) => {
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
+      return { ...product.toObject(), final_price: finalPrice };
+    });
+
+    res.json(updatedProducts);
   } catch (error) {
     res.status(500).json({ message: "Error fetching products", error });
   }
