@@ -7,15 +7,15 @@ const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .populate("user_id", "name email")
-      .populate("products.product_id");
+      .populate("products.id");
 
     // Transform products: replace product_id with product
     const transformedOrders = orders.map((order) => {
       const transformedProducts = order.products.map((p) => {
         return {
           ...p._doc,
-          product: p.product_id, // new key
-          product_id: undefined, // remove old key
+          product: p.id, // new key
+          id: undefined, // remove old key
         };
       });
 
@@ -32,17 +32,12 @@ const getAllOrders = async (req, res) => {
 };
 
 // Get order by ID
-const getOrderById = async (req, res) => {
+const getMyOrders = async (req, res) => {
   try {
-    const { id } = req.params;
-    const order = await Order.findById(id)
-      .populate("user_id", "name email")
-      .populate("products.product_id");
+    const userId = req.userId;
+    const orders = await Order.find({ user_id: userId }).sort({ _id: -1 });
 
-    if (!order) {
-      return handleResponse(res, null, 404, "Order not found");
-    }
-    handleResponse(res, order);
+    handleResponse(res, orders, 200);
   } catch (error) {
     handleError(res, error);
   }
@@ -50,25 +45,25 @@ const getOrderById = async (req, res) => {
 
 // Create a new order
 const createOrder = async (req, res) => {
+  const userId = req.userId;
   try {
     const {
       code,
       items_count,
-      user_id,
       customer_name,
       phone,
       district,
       address,
-      products,
+      items,
       extra_fees,
       total_price,
     } = req.body;
 
     // Validate products and calculate total price
-    const productIds = products.map((p) => p.product_id);
+    const productIds = items.map((p) => p.id);
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
-    if (productDetails.length !== products.length) {
+    if (productDetails.length !== items.length) {
       return handleResponse(
         res,
         null,
@@ -79,9 +74,7 @@ const createOrder = async (req, res) => {
 
     // Calculate total price from product prices and quantities
     let calculatedTotalPrice = productDetails.reduce((total, product) => {
-      const matchedProduct = products.find(
-        (p) => p.product_id === product._id.toString()
-      );
+      const matchedProduct = items.find((p) => p.id === product._id.toString());
       const productPrice = parseFloat(product.price || "0");
       const productQuantity = matchedProduct.quantity || 1;
       return total + productPrice * productQuantity;
@@ -108,12 +101,12 @@ const createOrder = async (req, res) => {
     const newOrder = new Order({
       code,
       items_count,
-      user_id,
+      userId,
       customer_name,
       phone,
       district,
       address,
-      products,
+      products: items,
       extra_fees,
       total_price,
     });
@@ -153,7 +146,7 @@ const updateOrderStatus = async (req, res) => {
 
 module.exports = {
   getAllOrders,
-  getOrderById,
+  getMyOrders,
   createOrder,
   updateOrderStatus,
 };
