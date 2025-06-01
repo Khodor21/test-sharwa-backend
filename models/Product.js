@@ -15,13 +15,24 @@ const productSchema = new mongoose.Schema({
     required: true,
   },
   quantity: {
-    type: Number,
+    type: String,
     required: true,
     default: 0,
   },
   price: {
     type: String,
     required: true,
+  },
+  discount: {
+    type: String,
+    required: false,
+    default: "0",
+  },
+  discount_type: {
+    type: String,
+    enum: ["percentage", "value"],
+    required: false,
+    default: "value",
   },
   target_audience: {
     type: String,

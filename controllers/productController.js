@@ -1,12 +1,25 @@
-const Product = require("../models/Product");
-const Category = require("../models/Category");
+const Product = require("../models/Product.js");
+const Category = require("../models/Category.js");
 const mongoose = require("mongoose");
 const multer = require("multer");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-const { uploadImageToFirebase } = require("../utils/firebaseUtils");
-const { handleResponse, handleError } = require("../utils/helpers");
+const { uploadImageToFirebase } = require("../utils/firebaseUtils.js");
+const { handleResponse, handleError } = require("../utils/helpers.js");
+
+// Utility to calculate final price
+const calculateFinalPrice = (price, discount, discountType) => {
+  const numericPrice = parseFloat(price) || 0;
+  const numericDiscount = parseFloat(discount) || 0;
+
+  if (discountType === "percentage") {
+    return numericPrice - (numericPrice * numericDiscount) / 100;
+  } else if (discountType === "value") {
+    return numericPrice - numericDiscount;
+  }
+  return numericPrice;
+};
 
 // Create Product
 const createProduct = async (req, res) => {
@@ -17,33 +30,29 @@ const createProduct = async (req, res) => {
     pin,
     quantity,
     price,
+    discount,
+    discount_type, // ✅ new
     target_audience,
+    related_products,
   } = req.body;
-  console.log("BODY:", req.body);
-  console.log("FILES:", req.files);
+
   try {
     const category = await Category.findById(category_id);
     if (!category) {
-      return res.status(400).json({
-        success: false,
-        message: "Category not found",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Category not found" });
     }
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No images uploaded",
-      });
+    const mainImageFile = req.files?.main_image?.[0];
+    const additionalImageFiles = req.files?.images || [];
+
+    if (!mainImageFile) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Main image is required" });
     }
 
-    if (!req.body || !req.files) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing form data or files",
-      });
-    }
-    const mainImageFile = req.files[0];
     const mainImageUrl = await uploadImageToFirebase(
       mainImageFile.buffer,
       mainImageFile.originalname,
@@ -51,10 +60,8 @@ const createProduct = async (req, res) => {
       "products"
     );
 
-    // Upload additional images
     const additionalImages = [];
-    for (let i = 1; i < req.files.length; i++) {
-      const file = req.files[i];
+    for (const file of additionalImageFiles) {
       const imageUrl = await uploadImageToFirebase(
         file.buffer,
         file.originalname,
@@ -64,23 +71,36 @@ const createProduct = async (req, res) => {
       additionalImages.push(imageUrl);
     }
 
-    // Create the new product
     const product = new Product({
       title,
       description,
       category_id,
-      related_products: [],
+      related_products,
       pin,
       main_image: mainImageUrl,
       images: additionalImages,
       quantity,
       price,
+      discount,
+      discount_type,
       target_audience,
     });
 
-    // Save the product to the database
     await product.save();
-    return handleResponse(res, product, 201, "Product created successfully");
+
+    const finalPrice = calculateFinalPrice(
+      product.price,
+      product.discount,
+      product.discount_type
+    );
+    const productData = { ...product.toObject(), final_price: finalPrice };
+
+    return handleResponse(
+      res,
+      productData,
+      201,
+      "Product created successfully"
+    );
   } catch (error) {
     return handleError(res, error);
   }
@@ -92,7 +112,17 @@ const getAllProducts = async (req, res) => {
     const products = await Product.find()
       .populate("category_id")
       .populate("related_products");
-    return handleResponse(res, products, 200, "Products found");
+
+    const updatedProducts = products.map((product) => {
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
+      return { ...product.toObject(), final_price: finalPrice };
+    });
+
+    return handleResponse(res, updatedProducts, 200, "Products found");
   } catch (error) {
     return handleError(res, error);
   }
@@ -103,125 +133,155 @@ const getProductById = async (req, res) => {
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Product ID",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid Product ID" });
   }
 
   try {
     const product = await Product.findById(id)
       .populate("category_id")
       .populate("related_products");
+
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    return handleResponse(res, product, 200, "Product found");
+
+    const finalPrice = calculateFinalPrice(
+      product.price,
+      product.discount,
+      product.discount_type
+    );
+    const productData = { ...product.toObject(), final_price: finalPrice };
+
+    return handleResponse(res, productData, 200, "Product found");
   } catch (error) {
     return handleError(res, error);
+  }
+};
+
+const getProductsByCategoryTitle = async (req, res) => {
+  const { title } = req.query;
+
+  try {
+    const category = await Category.findOne({
+      title: new RegExp(`^${title}$`, "i"),
+    });
+
+    if (!category) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
+    }
+
+    const products = await Product.find({ category_id: category._id });
+
+    const updatedProducts = products.map((product) => {
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
+      return { ...product.toObject(), final_price: finalPrice };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Products found",
+      data: updatedProducts,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 // Update Product
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Product ID",
-    });
-  }
-
   const {
     title,
     description,
     category_id,
-    // related_products,
     pin,
     quantity,
     price,
+    discount,
+    discount_type, // ✅ added
     target_audience,
+    related_products,
   } = req.body;
 
   try {
-    // Validate that the category_id (if provided) exists
-    if (category_id) {
-      const category = await Category.findById(category_id);
-      if (!category) {
-        return res.status(400).json({
-          success: false,
-          message: "Category not found",
-        });
+    const product = await Product.findById(id);
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    if (title) product.title = title;
+    if (description) product.description = description;
+    if (category_id) product.category_id = category_id;
+    if (typeof pin !== "undefined") product.pin = pin;
+    if (quantity) product.quantity = quantity;
+    if (price) product.price = price;
+    if (discount) product.discount = discount;
+    if (discount_type) product.discount_type = discount_type;
+    if (target_audience) product.target_audience = target_audience;
+
+    if (related_products) {
+      try {
+        product.related_products = JSON.parse(related_products);
+      } catch (err) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Invalid format for related_products",
+          });
       }
     }
 
-    // Fetch the existing product
-    const existingProduct = await Product.findById(id);
-    if (!existingProduct) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    // Initialize updated product data
-    const updatedData = {
-      title: title || existingProduct.title,
-      description: description || existingProduct.description,
-      category_id: category_id || existingProduct.category_id,
-      related_products: existingProduct.related_products,
-      // related_products: related_products || existingProduct.related_products,
-      pin: pin !== undefined ? pin : existingProduct.pin,
-      quantity: quantity !== undefined ? quantity : existingProduct.quantity,
-      price: price !== undefined ? price : existingProduct.price,
-      target_audience: target_audience || existingProduct.target_audience,
-    };
-
-    // Handle uploaded images if provided
-    if (req.files && req.files.length > 0) {
-      // Upload new main image
-      const mainImageFile = req.files[0];
+    const mainImageFile = req.files?.main_image?.[0];
+    if (mainImageFile) {
       const mainImageUrl = await uploadImageToFirebase(
         mainImageFile.buffer,
         mainImageFile.originalname,
         mainImageFile.mimetype,
         "products"
       );
+      product.main_image = mainImageUrl;
+    }
 
-      updatedData.main_image = mainImageUrl;
-
-      // Upload new additional images
-      const additionalImages = [];
-      for (let i = 1; i < req.files.length; i++) {
-        const file = req.files[i];
+    const additionalImageFiles = req.files?.images || [];
+    if (additionalImageFiles.length > 0) {
+      const newImages = [];
+      for (const file of additionalImageFiles) {
         const imageUrl = await uploadImageToFirebase(
           file.buffer,
           file.originalname,
           file.mimetype,
           "products"
         );
-        additionalImages.push(imageUrl);
+        newImages.push(imageUrl);
       }
-
-      updatedData.images = additionalImages;
-    } else {
-      // If no new images are provided, retain existing images
-      updatedData.main_image = existingProduct.main_image;
-      updatedData.images = existingProduct.images;
+      product.images = newImages;
     }
 
-    // Update the product
-    const updatedProduct = await Product.findByIdAndUpdate(id, updatedData, {
-      new: true,
-    });
+    await product.save();
+
+    const finalPrice = calculateFinalPrice(
+      product.price,
+      product.discount,
+      product.discount_type
+    );
+    const productData = { ...product.toObject(), final_price: finalPrice };
 
     return handleResponse(
       res,
-      updatedProduct,
+      productData,
       200,
       "Product updated successfully"
     );
@@ -229,37 +289,54 @@ const updateProduct = async (req, res) => {
     return handleError(res, error);
   }
 };
+
 // Delete Product
 const deleteProduct = async (req, res) => {
   const { id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Product ID",
-    });
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid Product ID" });
   }
 
   try {
     const product = await Product.findByIdAndDelete(id);
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
+
     return handleResponse(res, null, 200, "Product deleted successfully");
   } catch (error) {
     return handleError(res, error);
   }
 };
+
+// Search Product
 const searchProducts = async (req, res) => {
   try {
-    const { query } = req.query;
+    const searchTerm = req.query.query;
+
+    if (typeof searchTerm !== "string" || !searchTerm.trim()) {
+      return res.status(400).json({ message: "Invalid query parameter" });
+    }
+
     const products = await Product.find({
-      title: { $regex: query, $options: "i" },
+      title: { $regex: searchTerm, $options: "i" },
     });
-    res.json(products);
+
+    const updatedProducts = products.map((product) => {
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
+      return { ...product.toObject(), final_price: finalPrice };
+    });
+
+    res.json(updatedProducts);
   } catch (error) {
     res.status(500).json({ message: "Error fetching products", error });
   }
@@ -272,5 +349,6 @@ module.exports = {
   updateProduct,
   deleteProduct,
   searchProducts,
+  getProductsByCategoryTitle,
   upload,
 };

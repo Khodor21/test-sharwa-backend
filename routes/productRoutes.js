@@ -6,10 +6,19 @@ const {
   createProduct,
   getAllProducts,
   getProductById,
+  getProductsByCategoryTitle,
   updateProduct,
   deleteProduct,
   searchProducts,
 } = require("../controllers/productController");
+router.post(
+  "/product",
+  upload.fields([
+    { name: "main_image", maxCount: 1 },
+    { name: "images", maxCount: 10 },
+  ]),
+  createProduct
+);
 
 router.post("/product", upload.array("images", 10), createProduct);
 
@@ -19,7 +28,16 @@ router.get("/search", searchProducts);
 
 router.get("/products/:id", getProductById);
 
-router.post("/products/:id", upload.array("images", 10), updateProduct);
+router.post(
+  "/product/:id",
+  upload.fields([
+    { name: "main_image", maxCount: 1 },
+    { name: "images", maxCount: 10 },
+  ]),
+  updateProduct
+);
+
+router.get("/productsByCategory", getProductsByCategoryTitle);
 
 router.delete("/products/:id", deleteProduct);
 
