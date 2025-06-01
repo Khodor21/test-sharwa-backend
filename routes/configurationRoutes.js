@@ -4,6 +4,7 @@ const {
   saveConfig,
   getConfig,
   updateConfig,
+  deleteConfig,
 } = require("../controllers/configurationController");
 
 router.post("/config", saveConfig);

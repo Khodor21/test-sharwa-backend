@@ -1,8 +1,12 @@
 const Category = require("../models/Category");
+const Product = require("../models/Product");
+const MainSection = require("../models/MainSection");
+
 const { handleResponse, handleError } = require("../utils/helpers");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 const { uploadImageToFirebase } = require("../utils/firebaseUtils");
+const { default: mongoose } = require("mongoose");
 
 // Create a new category
 const createCategory = async (req, res) => {
@@ -47,9 +51,14 @@ const getAllCategories = async (req, res) => {
 // Update a category by ID
 const updateCategory = async (req, res) => {
   try {
+    const { type: id } = req.params;
     const { title, description } = req.body;
-    const category = await Category.findById(req.params.id);
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return handleResponse(res, null, 400, "Invalid category ID");
+    }
+
+    const category = await Category.findById(id);
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }
@@ -65,21 +74,33 @@ const updateCategory = async (req, res) => {
 };
 
 // Delete a category by ID
+// akh
+
 const deleteCategory = async (req, res) => {
   try {
-    const category = await Category.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return handleResponse(res, null, 400, "Invalid category ID");
+    }
+
+    const category = await Category.findByIdAndDelete(id);
 
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }
+    await Product.deleteMany({ category_id: id });
 
-    if (!category) {
-      return handleResponse(res, null, 404, "Category not found");
-    }
+    await MainSection.deleteMany({ category_id: id });
 
-    handleResponse(res, null, 200, "Category deleted successfully");
+    return handleResponse(
+      res,
+      null,
+      200,
+      "Category, related products, and related main sections deleted"
+    );
   } catch (error) {
-    handleError(res, error);
+    return handleError(res, error);
   }
 };
 
