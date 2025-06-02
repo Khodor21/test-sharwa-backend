@@ -1,6 +1,10 @@
 const Order = require("../models/Order");
 const Product = require("../models/Product");
-const { handleResponse, handleError } = require("../utils/helpers");
+const {
+  handleResponse,
+  handleError,
+  calculateFinalPrice,
+} = require("../utils/helpers");
 
 // Get all orders
 const getAllOrders = async (req, res) => {
@@ -32,6 +36,50 @@ const getAllOrders = async (req, res) => {
 };
 
 // Get order by ID
+const getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Order.findById(id)
+      .populate("user_id", "name email")
+      .populate("products.id"); // Populate full product details
+
+    if (!order) {
+      return handleResponse(res, null, 404, "Order not found");
+    }
+
+    // Transform products to include final price
+    const transformedProducts = order.products.map((p) => {
+      const productData = p.id; // Full product doc from populate
+
+      const final_price = calculateFinalPrice(
+        productData.price,
+        productData.discount,
+        productData.discount_type
+      );
+
+      return {
+        ...p._doc,
+        product: {
+          ...productData._doc,
+          final_price: parseFloat(final_price.toFixed(2)), // Clean format
+        },
+        id: undefined, // remove the old populated id key
+      };
+    });
+
+    const transformedOrder = {
+      ...order._doc,
+      products: transformedProducts,
+    };
+
+    handleResponse(res, transformedOrder, 200);
+  } catch (error) {
+    handleError(res, error);
+  }
+};
+
+// Get order by ID
 const getMyOrders = async (req, res) => {
   try {
     const userId = req.userId;
@@ -45,10 +93,9 @@ const getMyOrders = async (req, res) => {
 
 // Create a new order
 const createOrder = async (req, res) => {
-  const userId = req.userId;
   try {
     const {
-      code,
+      userId,
       items_count,
       customer_name,
       phone,
@@ -72,15 +119,18 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Calculate total price from product prices and quantities
+    // Calculate total using discounted prices
     let calculatedTotalPrice = productDetails.reduce((total, product) => {
       const matchedProduct = items.find((p) => p.id === product._id.toString());
-      const productPrice = parseFloat(product.price || "0");
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type
+      );
       const productQuantity = matchedProduct.quantity || 1;
-      return total + productPrice * productQuantity;
+      return total + finalPrice * productQuantity;
     }, 0);
 
-    // Add extra fees to the calculated total
     calculatedTotalPrice += parseFloat(extra_fees || "0");
 
     if (
@@ -89,19 +139,26 @@ const createOrder = async (req, res) => {
     ) {
       return handleResponse(
         res,
-        {
-          calculatedTotalPrice: calculatedTotalPrice.toFixed(2),
-        },
+        { calculatedTotalPrice: calculatedTotalPrice.toFixed(2) },
         400,
         "Total price does not match the calculated total price"
       );
     }
 
+    // ✅ Generate a unique serial code (e.g., 6-digit alphanumeric)
+    let uniqueCode;
+    let isUnique = false;
+    while (!isUnique) {
+      uniqueCode = generateRandomCode(); // e.g., "AB1234"
+      const existingOrder = await Order.findOne({ code: uniqueCode });
+      if (!existingOrder) isUnique = true;
+    }
+
     // Create the new order
     const newOrder = new Order({
-      code,
+      code: uniqueCode,
       items_count,
-      userId,
+      user_id: userId,
       customer_name,
       phone,
       district,
@@ -117,6 +174,16 @@ const createOrder = async (req, res) => {
     handleError(res, error);
   }
 };
+
+// Utility function to generate a unique serial code
+function generateRandomCode() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < 6; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+}
 
 // Update order status
 const updateOrderStatus = async (req, res) => {
@@ -149,4 +216,5 @@ module.exports = {
   getMyOrders,
   createOrder,
   updateOrderStatus,
+  getOrderById,
 };

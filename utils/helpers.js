@@ -13,8 +13,21 @@ const handleError = (res, error, statusCode = 500) => {
     message: error.message || "Something went wrong",
   });
 };
+// Utility to calculate final price
+const calculateFinalPrice = (price, discount, discountType) => {
+  const numericPrice = parseFloat(price) || 0;
+  const numericDiscount = parseFloat(discount) || 0;
+
+  if (discountType === "percentage") {
+    return numericPrice - (numericPrice * numericDiscount) / 100;
+  } else if (discountType === "value") {
+    return numericPrice - numericDiscount;
+  }
+  return numericPrice;
+};
 
 module.exports = {
   handleError,
   handleResponse,
+  calculateFinalPrice,
 };
