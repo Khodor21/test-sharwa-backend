@@ -15,4 +15,6 @@ router.get("/my-orders", verifyToken, orderController.getMyOrders);
 
 router.post("/orders/update-status/:id", orderController.updateOrderStatus);
 
+router.get("/orders/:id", verifyToken, orderController.getOrderById);
+
 module.exports = router;

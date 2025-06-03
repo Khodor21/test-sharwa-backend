@@ -1,5 +1,9 @@
 const MainSection = require("../models/MainSection");
-const { handleResponse, handleError } = require("../utils/helpers");
+const {
+  handleResponse,
+  handleError,
+  calculateFinalPrice,
+} = require("../utils/helpers");
 const Category = require("../models/Category");
 const Product = require("../models/Product");
 const multer = require("multer");
@@ -108,7 +112,14 @@ const getAllMainSections = async (req, res) => {
           banner_3: section.banner_3 || "",
           banner_4: section.banner_4 || "",
         },
-        products: filteredProducts, // Include filtered products
+        products: filteredProducts.map((product) => {
+          const finalPrice = calculateFinalPrice(
+            product.price,
+            product.discount,
+            product.discount_type
+          );
+          return { ...product.toObject(), final_price: finalPrice };
+        }),
       };
     });
 
