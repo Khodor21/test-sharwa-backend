@@ -30,7 +30,7 @@ const productSchema = new mongoose.Schema({
   },
   discount_type: {
     type: String,
-    enum: ["percentage", "value"],
+    enum: ["percentage", "value", "no-discount"],
     required: false,
     default: "value",
   },

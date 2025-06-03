@@ -6,20 +6,11 @@ const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 
 const { uploadImageToFirebase } = require("../utils/firebaseUtils.js");
-const { handleResponse, handleError } = require("../utils/helpers.js");
-
-// Utility to calculate final price
-const calculateFinalPrice = (price, discount, discountType) => {
-  const numericPrice = parseFloat(price) || 0;
-  const numericDiscount = parseFloat(discount) || 0;
-
-  if (discountType === "percentage") {
-    return numericPrice - (numericPrice * numericDiscount) / 100;
-  } else if (discountType === "value") {
-    return numericPrice - numericDiscount;
-  }
-  return numericPrice;
-};
+const {
+  handleResponse,
+  handleError,
+  calculateFinalPrice,
+} = require("../utils/helpers.js");
 
 // Create Product
 const createProduct = async (req, res) => {
@@ -235,12 +226,10 @@ const updateProduct = async (req, res) => {
       try {
         product.related_products = JSON.parse(related_products);
       } catch (err) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid format for related_products",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid format for related_products",
+        });
       }
     }
 

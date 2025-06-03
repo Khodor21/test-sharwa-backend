@@ -6,12 +6,14 @@ const verifyToken = require("../utils/VerifyToken");
 
 //try to fix github error
 
-router.post("/order", verifyToken, orderController.createOrder);
+router.post("/order", orderController.createOrder);
 
 router.get("/orders", orderController.getAllOrders);
 
 router.get("/my-orders", verifyToken, orderController.getMyOrders);
 
 router.post("/orders/update-status/:id", orderController.updateOrderStatus);
+
+router.get("/orders/:id", verifyToken, orderController.getOrderById);
 
 module.exports = router;
