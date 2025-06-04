@@ -80,6 +80,17 @@ const login = async (req, res) => {
   }
 };
 
+const getAuthToken = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized: No token found" });
+    }
+    return res.json({ token });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error: " + error.message });
+  }
+};
 const logout = async (req, res) => {
   try {
     res.clearCookie("token", {
@@ -91,18 +102,6 @@ const logout = async (req, res) => {
     res.status(200).json({ message: "Logout successful" });
   } catch (error) {
     res.status(500).json({ message: error.message });
-  }
-};
-
-const getAuthToken = async (req, res) => {
-  try {
-    const token = req.cookies.token;
-    if (!token) {
-      return res.status(401).json({ message: "Unauthorized: No token found" });
-    }
-    return res.json({ token });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error: " + error.message });
   }
 };
 
@@ -122,7 +121,7 @@ const deleteAccount = async (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       path: "/",
     });
     res.status(200).json({ message: "Account deleted successfully" });
