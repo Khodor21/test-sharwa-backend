@@ -9,6 +9,7 @@ const mainSectionRoutes = require("./routes/mainSectionRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const configurationRoutes = require("./routes/configurationRoutes");
 const heroRoutes = require("./routes/heroRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
@@ -34,6 +35,7 @@ app.use("/api", mainSectionRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", configurationRoutes);
 app.use("/api", heroRoutes);
+app.use("/api", adminRoutes);
 
 connectDB();
 

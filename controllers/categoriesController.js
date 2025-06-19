@@ -51,7 +51,7 @@ const getAllCategories = async (req, res) => {
 // Update a category by ID
 const updateCategory = async (req, res) => {
   try {
-    const { type: id } = req.params;
+    const { id } = req.params;
     const { title, description } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {

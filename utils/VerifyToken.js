@@ -3,14 +3,15 @@ const jwt = require("jsonwebtoken");
 const verifyToken = (req, res, next) => {
   try {
     const token = req.cookies.token;
-
     if (!token) {
       return res.status(401).json({ message: "No token. Unauthorized." });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.id; // Attach user ID to request
+    req.userId = decoded.id;
+    req.user = decoded;
     next();
+    console.log("Token in cookies:", req.cookies.token);
   } catch (err) {
     return res.status(401).json({ message: "Invalid token" });
   }
