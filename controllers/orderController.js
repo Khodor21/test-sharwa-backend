@@ -109,7 +109,7 @@ const createOrder = async (req, res) => {
     } = req.body;
 
     const productIds = items
-      .map((p) => p.id)
+      .map((p) => p._id || p.id)
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
     const productDetails = await Product.find({ _id: { $in: productIds } });
