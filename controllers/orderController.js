@@ -106,7 +106,6 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
-    // Validate products and calculate total price
     const productIds = items.map((p) => p.id);
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
@@ -119,17 +118,30 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Calculate total using discounted prices
-    let calculatedTotalPrice = productDetails.reduce((total, product) => {
-      const matchedProduct = items.find((p) => p.id === product._id.toString());
+    // Calculate final price based on discounts and quantities
+    let calculatedTotalPrice = 0;
+    for (const product of productDetails) {
+      const matchedItem = items.find((p) => p.id === product._id.toString());
+      const quantity = matchedItem.quantity || 1;
+
+      // Stock check
+      if (product.quantity < quantity) {
+        return handleResponse(
+          res,
+          null,
+          400,
+          `Insufficient stock for product: ${product.title}`
+        );
+      }
+
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
         product.discount_type
       );
-      const productQuantity = matchedProduct.quantity || 1;
-      return total + finalPrice * productQuantity;
-    }, 0);
+
+      calculatedTotalPrice += finalPrice * quantity;
+    }
 
     calculatedTotalPrice += parseFloat(extra_fees || "0");
 
@@ -145,7 +157,15 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Generate a unique serial code (e.g., 6-digit alphanumeric)
+    // ✅ Update stock for each product
+    for (const product of productDetails) {
+      const matchedItem = items.find((p) => p.id === product._id.toString());
+      const orderedQty = matchedItem.quantity || 1;
+      product.quantity -= orderedQty;
+      await product.save();
+    }
+
+    // ✅ Generate unique order code
     let uniqueCode;
     let isUnique = false;
     while (!isUnique) {
@@ -154,7 +174,7 @@ const createOrder = async (req, res) => {
       if (!existingOrder) isUnique = true;
     }
 
-    // Create the new order
+    // ✅ Create and save the order
     const newOrder = new Order({
       code: uniqueCode,
       items_count,
@@ -169,9 +189,9 @@ const createOrder = async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
-    handleResponse(res, savedOrder, 201);
+    return handleResponse(res, savedOrder, 201);
   } catch (error) {
-    handleError(res, error);
+    return handleError(res, error);
   }
 };
 
