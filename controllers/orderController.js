@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const {
@@ -106,7 +108,10 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
-    const productIds = items.map((p) => p.id);
+    const productIds = items
+      .map((p) => p.id)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
     if (productDetails.length !== items.length) {
@@ -118,7 +123,6 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Calculate final price based on discounts and quantities
     let calculatedTotalPrice = 0;
     for (const product of productDetails) {
       const matchedItem = items.find((p) => p.id === product._id.toString());
