@@ -57,6 +57,20 @@ const productSchema = new mongoose.Schema({
       type: String,
     },
   ],
+  variations: {
+    type: [
+      {
+        name: { type: String },
+        options: [
+          {
+            label: String,
+            image: String,
+          },
+        ],
+      },
+    ],
+    default: [],
+  },
 });
 
 const Product = mongoose.model("Product", productSchema);

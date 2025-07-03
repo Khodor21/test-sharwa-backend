@@ -22,9 +22,10 @@ const createProduct = async (req, res) => {
     quantity,
     price,
     discount,
-    discount_type, // ✅ new
+    discount_type,
     target_audience,
     related_products,
+    variations,
   } = req.body;
 
   try {
@@ -75,6 +76,7 @@ const createProduct = async (req, res) => {
       discount,
       discount_type,
       target_audience,
+      variations: variations ? JSON.parse(variations) : [],
     });
 
     await product.save();
@@ -220,6 +222,17 @@ const updateProduct = async (req, res) => {
     if (price) product.price = price;
     if (discount) product.discount = discount;
     if (discount_type) product.discount_type = discount_type;
+    if (variations) {
+      try {
+        product.variations = JSON.parse(variations);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid format for variations",
+        });
+      }
+    }
+
     if (target_audience) product.target_audience = target_audience;
 
     if (related_products) {
