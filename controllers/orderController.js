@@ -21,6 +21,8 @@ const getAllOrders = async (req, res) => {
         return {
           ...p._doc,
           product: p.id, // new key
+          selected_variations: p.selected_variations || {},
+
           id: undefined, // remove old key
         };
       });
@@ -187,7 +189,11 @@ const createOrder = async (req, res) => {
       phone,
       district,
       address,
-      products: items,
+      products: items.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        selected_variations: item.selected_variations || {},
+      })),
       extra_fees,
       total_price,
     });

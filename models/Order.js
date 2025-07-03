@@ -40,6 +40,11 @@ const orderSchema = new mongoose.Schema(
           required: true,
           default: 1,
         },
+        selected_variations: {
+          type: Map,
+          of: String,
+          default: {},
+        },
       },
     ],
     extra_fees: {
