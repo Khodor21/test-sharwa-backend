@@ -41,8 +41,7 @@ const orderSchema = new mongoose.Schema(
           default: 1,
         },
         selected_variations: {
-          type: Map,
-          of: String,
+          type: Object,
           default: {},
         },
       },

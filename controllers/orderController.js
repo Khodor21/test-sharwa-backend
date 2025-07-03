@@ -190,8 +190,8 @@ const createOrder = async (req, res) => {
       district,
       address,
       products: items.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
+        id: item.id || item._id,
+        quantity: item.quantity || 1,
         selected_variations: item.selected_variations || {},
       })),
       extra_fees,
