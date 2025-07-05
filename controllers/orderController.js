@@ -110,19 +110,42 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
-    // ✅ Normalize product IDs from either 'id' or '_id'
+    // ✅ Early check for missing items or empty cart
+    if (!Array.isArray(items) || items.length === 0) {
+      return handleResponse(res, null, 400, "No products in order");
+    }
+
+    // ✅ Early check for missing IDs
+    const invalidItems = items.filter((p) => !p._id && !p.id);
+    if (invalidItems.length > 0) {
+      return handleResponse(
+        res,
+        { invalidItems },
+        400,
+        "Some products are missing IDs"
+      );
+    }
+
+    // ✅ Normalize and validate product IDs
     const productIds = items
       .map((p) => p._id || p.id)
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
 
+    if (productIds.length !== items.length) {
+      return handleResponse(res, null, 400, "Some product IDs are invalid");
+    }
+
     // ✅ Fetch product details from DB
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
-    // ✅ Compare lengths to detect invalid/missing items
     if (productDetails.length !== items.length) {
       const foundIds = productDetails.map((p) => p._id.toString());
-      const sentIds = items.map((p) => (p._id || p.id).toString());
+      const sentIds = items
+        .map((p) => p._id || p.id)
+        .filter((id) => !!id)
+        .map((id) => id.toString());
+
       const missingIds = sentIds.filter((id) => !foundIds.includes(id));
 
       return handleResponse(
@@ -133,8 +156,9 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Calculate total price and validate stock
+    // ✅ Validate stock and calculate total price
     let calculatedTotalPrice = 0;
+
     for (const product of productDetails) {
       const matchedItem = items.find(
         (p) =>
@@ -144,6 +168,7 @@ const createOrder = async (req, res) => {
 
       const quantity = matchedItem.quantity || 1;
 
+      // Check stock
       if (product.quantity < quantity) {
         return handleResponse(
           res,
@@ -197,7 +222,7 @@ const createOrder = async (req, res) => {
       if (!existingOrder) isUnique = true;
     }
 
-    // ✅ Create order
+    // ✅ Create new order document
     const newOrder = new Order({
       code: uniqueCode,
       items_count,
@@ -217,7 +242,7 @@ const createOrder = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // ✅ Send notification
+    // ✅ Send Telegram notification
     await sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
