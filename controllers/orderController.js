@@ -96,6 +96,7 @@ const getMyOrders = async (req, res) => {
 };
 
 // Create a new order
+
 const createOrder = async (req, res) => {
   try {
     const {
@@ -110,17 +111,27 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
-    // ✅ Early check for missing items
+    // Early check for items presence
     if (!Array.isArray(items) || items.length === 0) {
       return handleResponse(res, null, 400, "No products in order");
     }
 
-    // ✅ Normalize items to extract id from _id or $oid
+    // Normalize items: extract id string from _id (handle { $oid: "..." }) or use id field
     const normalizedItems = items.map((item) => {
-      const id =
-        typeof item._id === "object" && item._id?.$oid
-          ? item._id.$oid
-          : item._id || item.id;
+      let id = null;
+
+      if (
+        item._id &&
+        typeof item._id === "object" &&
+        item._id !== null &&
+        "$oid" in item._id
+      ) {
+        id = item._id.$oid;
+      } else if (typeof item._id === "string") {
+        id = item._id;
+      } else if (item.id) {
+        id = item.id;
+      }
 
       return {
         ...item,
@@ -128,7 +139,7 @@ const createOrder = async (req, res) => {
       };
     });
 
-    // ✅ Check for missing IDs
+    // Check for missing IDs after normalization
     const invalidItems = normalizedItems.filter((p) => !p.id);
     if (invalidItems.length > 0) {
       return handleResponse(
@@ -139,7 +150,7 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Validate and convert IDs to ObjectIds
+    // Validate IDs are valid Mongo ObjectIds and convert to ObjectId instances
     const productIds = normalizedItems
       .map((p) => p.id)
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
@@ -149,7 +160,7 @@ const createOrder = async (req, res) => {
       return handleResponse(res, null, 400, "Some product IDs are invalid");
     }
 
-    // ✅ Fetch product details from DB
+    // Fetch product details from DB
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
     if (productDetails.length !== normalizedItems.length) {
@@ -166,7 +177,7 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Validate stock and calculate total price
+    // Validate stock and calculate total price
     let calculatedTotalPrice = 0;
 
     for (const product of productDetails) {
@@ -208,7 +219,7 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Update stock
+    // Update product stock
     for (const product of productDetails) {
       const matchedItem = normalizedItems.find(
         (p) => p.id.toString() === product._id.toString()
@@ -218,7 +229,7 @@ const createOrder = async (req, res) => {
       await product.save();
     }
 
-    // ✅ Generate unique order code
+    // Generate unique order code
     let uniqueCode;
     let isUnique = false;
     while (!isUnique) {
@@ -227,7 +238,7 @@ const createOrder = async (req, res) => {
       if (!existingOrder) isUnique = true;
     }
 
-    // ✅ Create order
+    // Create new order document
     const newOrder = new Order({
       code: uniqueCode,
       items_count,
@@ -247,7 +258,7 @@ const createOrder = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // ✅ Telegram Notification
+    // Send Telegram notification
     await sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
