@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-
+const sendTelegramMessage = require("../utils/telegram");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const {
@@ -180,7 +180,6 @@ const createOrder = async (req, res) => {
       if (!existingOrder) isUnique = true;
     }
 
-    // ✅ Create and save the order
     const newOrder = new Order({
       code: uniqueCode,
       items_count,
@@ -199,6 +198,16 @@ const createOrder = async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
+    await sendTelegramMessage(`
+<b>🚨 طلب جديد!</b>
+👤 <b>الاسم:</b> ${customer_name}
+📞 <b>الهاتف:</b> ${phone}
+📍 <b>المنطقة:</b> ${district} - ${address}
+🧾 <b>الكود:</b> ${uniqueCode}
+🛒 <b>المنتجات:</b> ${items_count}
+💰 <b>الإجمالي:</b> ${total_price}$
+📅 <b>الوقت:</b> ${new Date().toLocaleString()}
+`);
     return handleResponse(res, savedOrder, 201);
   } catch (error) {
     return handleError(res, error);
