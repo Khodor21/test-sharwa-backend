@@ -96,6 +96,22 @@ const getMyOrders = async (req, res) => {
 };
 
 // Create a new order
+const mongoose = require("mongoose");
+const Product = require("../models/Product");
+const Order = require("../models/Order");
+const { handleResponse, handleError } = require("../utils/response");
+const { calculateFinalPrice } = require("../utils/calculatePrice");
+const { sendTelegramMessage } = require("../utils/telegram");
+const { generateRandomCode } = require("../utils/codeGenerator");
+
+// 🔁 Helper to safely extract ID from _id or id fields
+const extractId = (val) => {
+  if (!val) return null;
+  if (typeof val === "string") return val;
+  if (val.$oid) return val.$oid;
+  return null;
+};
+
 const createOrder = async (req, res) => {
   try {
     const {
@@ -110,25 +126,26 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
-    // ✅ Early check for missing items or empty cart
+    // ✅ Validate items array
     if (!Array.isArray(items) || items.length === 0) {
       return handleResponse(res, null, 400, "No products in order");
     }
 
-    // ✅ Early check for missing IDs
-    const invalidItems = items.filter((p) => !p._id && !p.id);
+    const invalidItems = items.filter(
+      (p) => !extractId(p._id) && !extractId(p.id)
+    );
     if (invalidItems.length > 0) {
       return handleResponse(
         res,
         { invalidItems },
         400,
-        "Some products are missing IDs"
+        "Some products are missing valid IDs"
       );
     }
 
-    // ✅ Normalize and validate product IDs
+    // ✅ Extract and validate product IDs
     const productIds = items
-      .map((p) => p._id || p.id)
+      .map((p) => extractId(p._id) || extractId(p.id))
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
 
@@ -136,16 +153,15 @@ const createOrder = async (req, res) => {
       return handleResponse(res, null, 400, "Some product IDs are invalid");
     }
 
-    // ✅ Fetch product details from DB
+    // ✅ Fetch products
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
     if (productDetails.length !== items.length) {
       const foundIds = productDetails.map((p) => p._id.toString());
       const sentIds = items
-        .map((p) => p._id || p.id)
+        .map((p) => extractId(p._id) || extractId(p.id))
         .filter((id) => !!id)
         .map((id) => id.toString());
-
       const missingIds = sentIds.filter((id) => !foundIds.includes(id));
 
       return handleResponse(
@@ -156,19 +172,17 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Validate stock and calculate total price
+    // ✅ Calculate total and check stock
     let calculatedTotalPrice = 0;
 
     for (const product of productDetails) {
-      const matchedItem = items.find(
-        (p) =>
-          (p._id && p._id.toString() === product._id.toString()) ||
-          (p.id && p.id.toString() === product._id.toString())
-      );
+      const matchedItem = items.find((p) => {
+        const itemId = extractId(p._id) || extractId(p.id);
+        return itemId && itemId.toString() === product._id.toString();
+      });
 
       const quantity = matchedItem.quantity || 1;
 
-      // Check stock
       if (product.quantity < quantity) {
         return handleResponse(
           res,
@@ -203,11 +217,11 @@ const createOrder = async (req, res) => {
 
     // ✅ Update product stock
     for (const product of productDetails) {
-      const matchedItem = items.find(
-        (p) =>
-          (p._id && p._id.toString() === product._id.toString()) ||
-          (p.id && p.id.toString() === product._id.toString())
-      );
+      const matchedItem = items.find((p) => {
+        const itemId = extractId(p._id) || extractId(p.id);
+        return itemId && itemId.toString() === product._id.toString();
+      });
+
       const orderedQty = matchedItem.quantity || 1;
       product.quantity -= orderedQty;
       await product.save();
@@ -217,12 +231,12 @@ const createOrder = async (req, res) => {
     let uniqueCode;
     let isUnique = false;
     while (!isUnique) {
-      uniqueCode = generateRandomCode();
+      uniqueCode = generateRandomCode(); // like "AB1234"
       const existingOrder = await Order.findOne({ code: uniqueCode });
       if (!existingOrder) isUnique = true;
     }
 
-    // ✅ Create new order document
+    // ✅ Create and save the order
     const newOrder = new Order({
       code: uniqueCode,
       items_count,
@@ -232,7 +246,7 @@ const createOrder = async (req, res) => {
       district,
       address,
       products: items.map((item) => ({
-        id: item.id || item._id,
+        id: extractId(item.id) || extractId(item._id),
         quantity: item.quantity || 1,
         selected_variations: item.selected_variations || {},
       })),
