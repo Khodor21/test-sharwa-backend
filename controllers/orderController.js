@@ -110,27 +110,40 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
+    // ✅ Normalize product IDs from either 'id' or '_id'
     const productIds = items
       .map((p) => p._id || p.id)
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
+
+    // ✅ Fetch product details from DB
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
+    // ✅ Compare lengths to detect invalid/missing items
     if (productDetails.length !== items.length) {
+      const foundIds = productDetails.map((p) => p._id.toString());
+      const sentIds = items.map((p) => (p._id || p.id).toString());
+      const missingIds = sentIds.filter((id) => !foundIds.includes(id));
+
       return handleResponse(
         res,
-        null,
+        { missingIds },
         400,
         "Some products are invalid or missing"
       );
     }
 
+    // ✅ Calculate total price and validate stock
     let calculatedTotalPrice = 0;
     for (const product of productDetails) {
-      const matchedItem = items.find((p) => p.id === product._id.toString());
+      const matchedItem = items.find(
+        (p) =>
+          (p._id && p._id.toString() === product._id.toString()) ||
+          (p.id && p.id.toString() === product._id.toString())
+      );
+
       const quantity = matchedItem.quantity || 1;
 
-      // Stock check
       if (product.quantity < quantity) {
         return handleResponse(
           res,
@@ -163,9 +176,13 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Update stock for each product
+    // ✅ Update product stock
     for (const product of productDetails) {
-      const matchedItem = items.find((p) => p.id === product._id.toString());
+      const matchedItem = items.find(
+        (p) =>
+          (p._id && p._id.toString() === product._id.toString()) ||
+          (p.id && p.id.toString() === product._id.toString())
+      );
       const orderedQty = matchedItem.quantity || 1;
       product.quantity -= orderedQty;
       await product.save();
@@ -175,11 +192,12 @@ const createOrder = async (req, res) => {
     let uniqueCode;
     let isUnique = false;
     while (!isUnique) {
-      uniqueCode = generateRandomCode(); // e.g., "AB1234"
+      uniqueCode = generateRandomCode();
       const existingOrder = await Order.findOne({ code: uniqueCode });
       if (!existingOrder) isUnique = true;
     }
 
+    // ✅ Create order
     const newOrder = new Order({
       code: uniqueCode,
       items_count,
@@ -198,6 +216,8 @@ const createOrder = async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
+
+    // ✅ Send notification
     await sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
@@ -208,6 +228,7 @@ const createOrder = async (req, res) => {
 💰 <b>الإجمالي:</b> ${total_price}$
 📅 <b>الوقت:</b> ${new Date().toLocaleString()}
 `);
+
     return handleResponse(res, savedOrder, 201);
   } catch (error) {
     return handleError(res, error);
