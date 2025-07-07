@@ -201,9 +201,10 @@ const updateProduct = async (req, res) => {
     quantity,
     price,
     discount,
-    discount_type, // ✅ added
+    discount_type,
     target_audience,
     related_products,
+    variations,
   } = req.body;
 
   try {

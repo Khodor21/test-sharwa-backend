@@ -63,12 +63,29 @@ const updateCategory = async (req, res) => {
       return handleResponse(res, null, 404, "Category not found");
     }
 
+    // Update title and description if provided
     category.title = title || category.title;
     category.description = description || category.description;
 
+    if (req.file) {
+      console.log("🔍 Uploading new image...");
+      const newImageUrl = await uploadImageToFirebase(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        "categories"
+      );
+      category.image = newImageUrl;
+    } else {
+      console.log("🔍 No new image uploaded");
+    }
+
     await category.save();
+    console.log("🔍 Updated category:", category);
+
     handleResponse(res, category, 200, "Category updated successfully");
   } catch (error) {
+    console.error("❌ Error in updateCategory:", error);
     handleError(res, error);
   }
 };
