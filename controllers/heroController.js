@@ -87,9 +87,3 @@ module.exports = {
   deleteAllHeroes,
   upload,
 };
-// ...existing code...
-module.exports = {
-  createHero,
-  getHero,
-  upload,
-};
