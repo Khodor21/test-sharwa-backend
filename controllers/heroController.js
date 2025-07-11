@@ -33,8 +33,8 @@ const createHero = async (req, res) => {
 
 const getHero = async (req, res) => {
   try {
-    const hero = await Hero.findOne();
-    if (!hero) {
+    const hero = await Hero.find();
+    if (!hero || hero.length === 0) {
       return handleResponse(res, null, 404, "Hero not found");
     }
     handleResponse(res, hero, 200, "Hero section fetched");
