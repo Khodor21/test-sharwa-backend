@@ -1,7 +1,7 @@
 const axios = require("axios");
 
-const BOT_TOKEN = "8050537458:AAFIC8UtkZzVeQOYwm6bmBahySvDrnOEgfg";
-const ADMIN_CHAT_ID = "1780939935";
+const BOT_TOKEN = "7683069829:AAFZ46GxiBo92DTtgU_uu0exdDbI8C9h634";
+const ADMIN_CHAT_ID = "8062668464";
 
 const sendTelegramMessage = async (text) => {
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
