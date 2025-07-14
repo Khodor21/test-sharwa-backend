@@ -52,16 +52,16 @@ const createProduct = async (req, res) => {
       "products"
     );
 
-    const additionalImages = [];
-    for (const file of additionalImageFiles) {
-      const imageUrl = await uploadImageToFirebase(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
-        "products"
-      );
-      additionalImages.push(imageUrl);
-    }
+    const additionalImages = await Promise.all(
+      additionalImageFiles.map((file) =>
+        uploadImageToFirebase(
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+          "products"
+        )
+      )
+    );
 
     const product = new Product({
       title,
