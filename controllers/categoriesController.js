@@ -11,7 +11,7 @@ const { default: mongoose } = require("mongoose");
 // Create a new category
 const createCategory = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, position } = req.body;
 
     if (!req.file) {
       return handleResponse(res, null, 400, "Image is required");
@@ -28,6 +28,7 @@ const createCategory = async (req, res) => {
     const category = new Category({
       title,
       description,
+      position,
       image: imageUrl,
     });
 
@@ -52,7 +53,7 @@ const getAllCategories = async (req, res) => {
 const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description } = req.body;
+    const { title, description, position } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return handleResponse(res, null, 400, "Invalid category ID");
@@ -66,6 +67,7 @@ const updateCategory = async (req, res) => {
     // Update title and description if provided
     category.title = title || category.title;
     category.description = description || category.description;
+    category.position = position || category.position;
 
     if (req.file) {
       console.log("🔍 Uploading new image...");

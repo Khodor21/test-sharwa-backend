@@ -13,6 +13,9 @@ const categorySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  position: {
+    type: Number,
+  },
 });
 
 const Category = mongoose.model("Category", categorySchema);
