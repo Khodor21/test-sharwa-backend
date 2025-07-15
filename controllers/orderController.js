@@ -250,7 +250,7 @@ const createOrder = async (req, res) => {
       products: normalizedItems.map((item) => ({
         id: item.id,
         quantity: item.quantity || 1,
-        selected_variations: item.selected_variations || {},
+        selected_variations: item.variations || {},
       })),
       extra_fees,
       total_price,
