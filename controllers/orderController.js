@@ -229,18 +229,8 @@ const createOrder = async (req, res) => {
       await product.save();
     }
 
-    // Generate unique order code
-    let uniqueCode;
-    let isUnique = false;
-    while (!isUnique) {
-      uniqueCode = generateRandomCode();
-      const existingOrder = await Order.findOne({ code: uniqueCode });
-      if (!existingOrder) isUnique = true;
-    }
-
-    // Create new order document
+    // Create new order document without code
     const newOrder = new Order({
-      code: uniqueCode,
       items_count,
       user_id: userId,
       customer_name,
@@ -256,7 +246,13 @@ const createOrder = async (req, res) => {
       total_price,
     });
 
+    // Save order first to get its _id
     const savedOrder = await newOrder.save();
+
+    // Slice _id to use as code
+    const slicedCode = savedOrder._id.toString().slice(0, 6);
+    savedOrder.code = slicedCode;
+    await savedOrder.save(); // Save updated code
 
     // Send Telegram notification
     await sendTelegramMessage(`
@@ -264,7 +260,7 @@ const createOrder = async (req, res) => {
 👤 <b>الاسم:</b> ${customer_name}
 📞 <b>الهاتف:</b> ${phone}
 📍 <b>المنطقة:</b> ${district} - ${address}
-🧾 <b>الكود:</b> ${uniqueCode}
+🧾 <b>الكود:</b> ${slicedCode}
 🛒 <b>المنتجات:</b> ${items_count}
 💰 <b>الإجمالي:</b> ${total_price}$
 📅 <b>الوقت:</b> ${new Date().toLocaleString()}
