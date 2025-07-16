@@ -4,7 +4,7 @@ const orderSchema = new mongoose.Schema(
   {
     code: {
       type: String,
-      required: true,
+      // required: true,
     },
     items_count: {
       type: Number,
