@@ -111,12 +111,11 @@ const createOrder = async (req, res) => {
       total_price,
     } = req.body;
 
-    // Early check for items presence
     if (!Array.isArray(items) || items.length === 0) {
       return handleResponse(res, null, 400, "No products in order");
     }
 
-    // Normalize items: extract id string from _id (handle { $oid: "..." }) or use id field
+    // Normalize item IDs
     const normalizedItems = items.map((item) => {
       let id = null;
 
@@ -139,7 +138,7 @@ const createOrder = async (req, res) => {
       };
     });
 
-    // Check for missing IDs after normalization
+    // Check for missing IDs
     const invalidItems = normalizedItems.filter((p) => !p.id);
     if (invalidItems.length > 0) {
       return handleResponse(
@@ -150,7 +149,7 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Validate IDs are valid Mongo ObjectIds and convert to ObjectId instances
+    // Validate and convert to ObjectId
     const productIds = normalizedItems
       .map((p) => p.id)
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
@@ -160,13 +159,12 @@ const createOrder = async (req, res) => {
       return handleResponse(res, null, 400, "Some product IDs are invalid");
     }
 
-    // Fetch product details from DB
+    // Fetch products from DB
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
     if (productDetails.length !== normalizedItems.length) {
       const foundIds = productDetails.map((p) => p._id.toString());
       const sentIds = normalizedItems.map((p) => p.id.toString());
-
       const missingIds = sentIds.filter((id) => !foundIds.includes(id));
 
       return handleResponse(
@@ -187,6 +185,7 @@ const createOrder = async (req, res) => {
 
       const quantity = matchedItem.quantity || 1;
 
+      // Check main stock
       if (product.quantity < quantity) {
         return handleResponse(
           res,
@@ -194,6 +193,33 @@ const createOrder = async (req, res) => {
           400,
           `Insufficient stock for product: ${product.title}`
         );
+      }
+
+      // Check variant stock if applicable
+      if (matchedItem.variations && product.variations) {
+        for (const selVar of matchedItem.variations) {
+          const varIndex = product.variations.findIndex(
+            (v) => v.name === selVar.name
+          );
+          if (varIndex !== -1) {
+            const optionIndex = product.variations[varIndex].options.findIndex(
+              (opt) => opt.label === selVar.selected
+            );
+            if (optionIndex !== -1) {
+              if (
+                product.variations[varIndex].options[optionIndex].quantity <
+                quantity
+              ) {
+                return handleResponse(
+                  res,
+                  null,
+                  400,
+                  `Insufficient stock for variant ${selVar.selected} of ${selVar.name} in product: ${product.title}`
+                );
+              }
+            }
+          }
+        }
       }
 
       const finalPrice = calculateFinalPrice(
@@ -219,17 +245,43 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Update product stock
+    // ✅ Update product and variant stock
     for (const product of productDetails) {
       const matchedItem = normalizedItems.find(
         (p) => p.id.toString() === product._id.toString()
       );
       const orderedQty = matchedItem.quantity || 1;
+
+      // Reduce main product quantity
       product.quantity -= orderedQty;
+
+      // Reduce variant quantities
+      if (matchedItem.variations && product.variations) {
+        matchedItem.variations.forEach((selVar) => {
+          const varIndex = product.variations.findIndex(
+            (v) => v.name === selVar.name
+          );
+          if (varIndex !== -1) {
+            const optionIndex = product.variations[varIndex].options.findIndex(
+              (opt) => opt.label === selVar.selected
+            );
+            if (optionIndex !== -1) {
+              product.variations[varIndex].options[optionIndex].quantity -=
+                orderedQty;
+              if (
+                product.variations[varIndex].options[optionIndex].quantity < 0
+              ) {
+                product.variations[varIndex].options[optionIndex].quantity = 0;
+              }
+            }
+          }
+        });
+      }
+
       await product.save();
     }
 
-    // Create new order document without code
+    // Create order
     const newOrder = new Order({
       items_count,
       user_id: userId,
@@ -246,13 +298,12 @@ const createOrder = async (req, res) => {
       total_price,
     });
 
-    // Save order first to get its _id
     const savedOrder = await newOrder.save();
 
-    // Slice _id to use as code
+    // Generate code from _id
     const slicedCode = savedOrder._id.toString().slice(0, 6);
     savedOrder.code = slicedCode;
-    await savedOrder.save(); // Save updated code
+    await savedOrder.save();
 
     // Send Telegram notification
     await sendTelegramMessage(`
