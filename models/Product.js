@@ -65,6 +65,11 @@ const productSchema = new mongoose.Schema({
           {
             label: String,
             image: String,
+            quantity: {
+              type: Number,
+              required: true,
+              default: 0,
+            },
           },
         ],
       },

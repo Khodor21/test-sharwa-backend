@@ -63,6 +63,19 @@ const createProduct = async (req, res) => {
       )
     );
 
+    // Parse variations if passed as JSON string
+    let parsedVariations = [];
+    if (variations) {
+      parsedVariations = JSON.parse(variations).map((v) => ({
+        name: v.name,
+        options: v.options.map((opt) => ({
+          label: opt.label,
+          image: opt.image || "",
+          quantity: opt.quantity || 0, // quantity per variant
+        })),
+      }));
+    }
+
     const product = new Product({
       title,
       description,
@@ -71,12 +84,12 @@ const createProduct = async (req, res) => {
       pin,
       main_image: mainImageUrl,
       images: additionalImages,
-      quantity,
+      quantity, // optional: could sum variant quantities if needed
       price,
       discount,
       discount_type,
       target_audience,
-      variations: variations ? JSON.parse(variations) : [],
+      variations: parsedVariations,
     });
 
     await product.save();
@@ -86,6 +99,7 @@ const createProduct = async (req, res) => {
       product.discount,
       product.discount_type
     );
+
     const productData = { ...product.toObject(), final_price: finalPrice };
 
     return handleResponse(
@@ -190,7 +204,6 @@ const getProductsByCategoryTitle = async (req, res) => {
   }
 };
 
-// Update Product
 const updateProduct = async (req, res) => {
   const { id } = req.params;
   const {
