@@ -155,18 +155,20 @@ const createOrder = async (req, res) => {
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
 
-    if (productIds.length !== normalizedItems.length) {
-      return handleResponse(res, null, 400, "Some product IDs are invalid");
+    if (productIds.length === 0) {
+      return handleResponse(res, null, 400, "No valid product IDs provided");
     }
 
     // Fetch products from DB
     const productDetails = await Product.find({ _id: { $in: productIds } });
 
-    if (productDetails.length !== normalizedItems.length) {
-      const foundIds = productDetails.map((p) => p._id.toString());
-      const sentIds = normalizedItems.map((p) => p.id.toString());
-      const missingIds = sentIds.filter((id) => !foundIds.includes(id));
+    // ✅ FIXED: allow multiple cart items with same product id
+    const foundIds = productDetails.map((p) => p._id.toString());
+    const missingIds = normalizedItems
+      .map((p) => p.id.toString())
+      .filter((id) => !foundIds.includes(id));
 
+    if (missingIds.length > 0) {
       return handleResponse(
         res,
         { missingIds },
@@ -179,56 +181,59 @@ const createOrder = async (req, res) => {
     let calculatedTotalPrice = 0;
 
     for (const product of productDetails) {
-      const matchedItem = normalizedItems.find(
+      // loop through all items that match this product
+      const matchedItems = normalizedItems.filter(
         (p) => p.id.toString() === product._id.toString()
       );
 
-      const quantity = matchedItem.quantity || 1;
+      for (const matchedItem of matchedItems) {
+        const quantity = matchedItem.quantity || 1;
 
-      // Check main stock
-      if (product.quantity < quantity) {
-        return handleResponse(
-          res,
-          null,
-          400,
-          `Insufficient stock for product: ${product.title}`
-        );
-      }
-
-      // Check variant stock if applicable
-      if (matchedItem.variations && product.variations) {
-        for (const selVar of matchedItem.variations) {
-          const varIndex = product.variations.findIndex(
-            (v) => v.name === selVar.name
+        // Check main stock
+        if (product.quantity < quantity) {
+          return handleResponse(
+            res,
+            null,
+            400,
+            `Insufficient stock for product: ${product.title}`
           );
-          if (varIndex !== -1) {
-            const optionIndex = product.variations[varIndex].options.findIndex(
-              (opt) => opt.label === selVar.selected
+        }
+
+        // Check variant stock if applicable
+        if (matchedItem.variations && product.variations) {
+          for (const selVar of matchedItem.variations) {
+            const varIndex = product.variations.findIndex(
+              (v) => v.name === selVar.name
             );
-            if (optionIndex !== -1) {
-              if (
-                product.variations[varIndex].options[optionIndex].quantity <
-                quantity
-              ) {
-                return handleResponse(
-                  res,
-                  null,
-                  400,
-                  `Insufficient stock for variant ${selVar.selected} of ${selVar.name} in product: ${product.title}`
-                );
+            if (varIndex !== -1) {
+              const optionIndex = product.variations[
+                varIndex
+              ].options.findIndex((opt) => opt.label === selVar.selected);
+              if (optionIndex !== -1) {
+                if (
+                  product.variations[varIndex].options[optionIndex].quantity <
+                  quantity
+                ) {
+                  return handleResponse(
+                    res,
+                    null,
+                    400,
+                    `Insufficient stock for variant ${selVar.selected} of ${selVar.name} in product: ${product.title}`
+                  );
+                }
               }
             }
           }
         }
+
+        const finalPrice = calculateFinalPrice(
+          product.price,
+          product.discount,
+          product.discount_type
+        );
+
+        calculatedTotalPrice += finalPrice * quantity;
       }
-
-      const finalPrice = calculateFinalPrice(
-        product.price,
-        product.discount,
-        product.discount_type
-      );
-
-      calculatedTotalPrice += finalPrice * quantity;
     }
 
     calculatedTotalPrice += parseFloat(extra_fees || "0");
@@ -247,35 +252,40 @@ const createOrder = async (req, res) => {
 
     // ✅ Update product and variant stock
     for (const product of productDetails) {
-      const matchedItem = normalizedItems.find(
+      const matchedItems = normalizedItems.filter(
         (p) => p.id.toString() === product._id.toString()
       );
-      const orderedQty = matchedItem.quantity || 1;
 
-      // Reduce main product quantity
-      product.quantity -= orderedQty;
+      for (const matchedItem of matchedItems) {
+        const orderedQty = matchedItem.quantity || 1;
 
-      // Reduce variant quantities
-      if (matchedItem.variations && product.variations) {
-        matchedItem.variations.forEach((selVar) => {
-          const varIndex = product.variations.findIndex(
-            (v) => v.name === selVar.name
-          );
-          if (varIndex !== -1) {
-            const optionIndex = product.variations[varIndex].options.findIndex(
-              (opt) => opt.label === selVar.selected
+        // Reduce main product quantity
+        product.quantity -= orderedQty;
+
+        // Reduce variant quantities
+        if (matchedItem.variations && product.variations) {
+          matchedItem.variations.forEach((selVar) => {
+            const varIndex = product.variations.findIndex(
+              (v) => v.name === selVar.name
             );
-            if (optionIndex !== -1) {
-              product.variations[varIndex].options[optionIndex].quantity -=
-                orderedQty;
-              if (
-                product.variations[varIndex].options[optionIndex].quantity < 0
-              ) {
-                product.variations[varIndex].options[optionIndex].quantity = 0;
+            if (varIndex !== -1) {
+              const optionIndex = product.variations[
+                varIndex
+              ].options.findIndex((opt) => opt.label === selVar.selected);
+              if (optionIndex !== -1) {
+                product.variations[varIndex].options[optionIndex].quantity -=
+                  orderedQty;
+                if (
+                  product.variations[varIndex].options[optionIndex].quantity < 0
+                ) {
+                  product.variations[varIndex].options[
+                    optionIndex
+                  ].quantity = 0;
+                }
               }
             }
-          }
-        });
+          });
+        }
       }
 
       await product.save();
@@ -300,12 +310,10 @@ const createOrder = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // Generate code from _id
     const slicedCode = savedOrder._id.toString().slice(0, 6);
     savedOrder.code = slicedCode;
     await savedOrder.save();
 
-    // Send Telegram notification
     await sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
