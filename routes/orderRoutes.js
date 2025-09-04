@@ -7,7 +7,7 @@ const verifyToken = require("../utils/VerifyToken");
 
 //try to fix github error
 
-router.post("/order", verifyToken, orderController.createOrder);
+router.post("/order", orderController.createOrder);
 
 router.get("/orders", orderController.getAllOrders);
 
