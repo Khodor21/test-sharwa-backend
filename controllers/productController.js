@@ -273,7 +273,6 @@ const updateProduct = async (req, res) => {
 
     const additionalImageFiles = req.files?.images || [];
     if (additionalImageFiles.length > 0) {
-      const newImages = [];
       for (const file of additionalImageFiles) {
         const imageUrl = await uploadImageToFirebase(
           file.buffer,
@@ -281,11 +280,20 @@ const updateProduct = async (req, res) => {
           file.mimetype,
           "products"
         );
-        newImages.push(imageUrl);
+        product.images.push(imageUrl); // ✅ append
       }
-      product.images = newImages;
     }
 
+    if (req.body.removed_images) {
+      try {
+        const removed = JSON.parse(req.body.removed_images);
+        product.images = product.images.filter((img) => !removed.includes(img));
+      } catch (err) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Invalid removed_images format" });
+      }
+    }
     await product.save();
 
     const finalPrice = calculateFinalPrice(
