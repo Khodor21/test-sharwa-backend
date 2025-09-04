@@ -98,6 +98,9 @@ const getMyOrders = async (req, res) => {
 // Create a new order
 
 const createOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       userId,
@@ -106,25 +109,37 @@ const createOrder = async (req, res) => {
       phone,
       district,
       address,
+      city,
       items,
       extra_fees,
       total_price,
     } = req.body;
 
+    // --- 1. Validate required fields ---
+    if (
+      !customer_name?.trim() ||
+      !phone?.trim() ||
+      !district?.trim() ||
+      !city?.trim() ||
+      !address?.trim()
+    ) {
+      return handleResponse(
+        res,
+        null,
+        400,
+        "Please fill all required fields: Name, Phone, District, City, Address"
+      );
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
       return handleResponse(res, null, 400, "No products in order");
     }
 
-    // Normalize item IDs
+    // --- 2. Normalize item IDs ---
     const normalizedItems = items.map((item) => {
       let id = null;
 
-      if (
-        item._id &&
-        typeof item._id === "object" &&
-        item._id !== null &&
-        "$oid" in item._id
-      ) {
+      if (item._id && typeof item._id === "object" && "$oid" in item._id) {
         id = item._id.$oid;
       } else if (typeof item._id === "string") {
         id = item._id;
@@ -132,13 +147,9 @@ const createOrder = async (req, res) => {
         id = item.id;
       }
 
-      return {
-        ...item,
-        id,
-      };
+      return { ...item, id };
     });
 
-    // Check for missing IDs
     const invalidItems = normalizedItems.filter((p) => !p.id);
     if (invalidItems.length > 0) {
       return handleResponse(
@@ -149,20 +160,16 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // Validate and convert to ObjectId
+    // --- 3. Fetch products from DB ---
     const productIds = normalizedItems
       .map((p) => p.id)
       .filter((id) => mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
 
-    if (productIds.length === 0) {
-      return handleResponse(res, null, 400, "No valid product IDs provided");
-    }
+    const productDetails = await Product.find({
+      _id: { $in: productIds },
+    }).session(session);
 
-    // Fetch products from DB
-    const productDetails = await Product.find({ _id: { $in: productIds } });
-
-    // ✅ FIXED: allow multiple cart items with same product id
     const foundIds = productDetails.map((p) => p._id.toString());
     const missingIds = normalizedItems
       .map((p) => p.id.toString())
@@ -173,15 +180,14 @@ const createOrder = async (req, res) => {
         res,
         { missingIds },
         400,
-        "Some products are invalid or missing"
+        "Some products are invalid"
       );
     }
 
-    // Validate stock and calculate total price
+    // --- 4. Validate stock and calculate total price ---
     let calculatedTotalPrice = 0;
 
     for (const product of productDetails) {
-      // loop through all items that match this product
       const matchedItems = normalizedItems.filter(
         (p) => p.id.toString() === product._id.toString()
       );
@@ -189,7 +195,6 @@ const createOrder = async (req, res) => {
       for (const matchedItem of matchedItems) {
         const quantity = matchedItem.quantity || 1;
 
-        // Check main stock
         if (product.quantity < quantity) {
           return handleResponse(
             res,
@@ -199,7 +204,7 @@ const createOrder = async (req, res) => {
           );
         }
 
-        // Check variant stock if applicable
+        // Check variants stock
         if (matchedItem.variations && product.variations) {
           for (const selVar of matchedItem.variations) {
             const varIndex = product.variations.findIndex(
@@ -231,12 +236,11 @@ const createOrder = async (req, res) => {
           product.discount,
           product.discount_type
         );
-
         calculatedTotalPrice += finalPrice * quantity;
       }
     }
 
-    calculatedTotalPrice += parseFloat(extra_fees || "0");
+    calculatedTotalPrice += parseFloat(extra_fees || 0);
 
     if (
       parseFloat(calculatedTotalPrice).toFixed(2) !==
@@ -250,19 +254,16 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ✅ Update product and variant stock
+    // --- 5. Update product stock safely ---
     for (const product of productDetails) {
       const matchedItems = normalizedItems.filter(
         (p) => p.id.toString() === product._id.toString()
       );
 
       for (const matchedItem of matchedItems) {
-        const orderedQty = matchedItem.quantity || 1;
+        const qty = matchedItem.quantity || 1;
+        product.quantity -= qty;
 
-        // Reduce main product quantity
-        product.quantity -= orderedQty;
-
-        // Reduce variant quantities
         if (matchedItem.variations && product.variations) {
           matchedItem.variations.forEach((selVar) => {
             const varIndex = product.variations.findIndex(
@@ -274,7 +275,7 @@ const createOrder = async (req, res) => {
               ].options.findIndex((opt) => opt.label === selVar.selected);
               if (optionIndex !== -1) {
                 product.variations[varIndex].options[optionIndex].quantity -=
-                  orderedQty;
+                  qty;
                 if (
                   product.variations[varIndex].options[optionIndex].quantity < 0
                 ) {
@@ -288,17 +289,18 @@ const createOrder = async (req, res) => {
         }
       }
 
-      await product.save();
+      await product.save({ session });
     }
 
-    // Create order
+    // --- 6. Create order ---
     const newOrder = new Order({
       items_count,
-      user_id: userId,
+      user_id: userId || null,
       customer_name,
       phone,
       district,
       address,
+      city,
       products: normalizedItems.map((item) => ({
         id: item.id,
         quantity: item.quantity || 1,
@@ -308,25 +310,30 @@ const createOrder = async (req, res) => {
       total_price,
     });
 
-    const savedOrder = await newOrder.save();
+    const savedOrder = await newOrder.save({ session });
+    savedOrder.code = savedOrder._id.toString().slice(0, 6);
+    await savedOrder.save({ session });
 
-    const slicedCode = savedOrder._id.toString().slice(0, 6);
-    savedOrder.code = slicedCode;
-    await savedOrder.save();
-
+    // --- 7. Send Telegram notification ---
     await sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
 📞 <b>الهاتف:</b> ${phone}
 📍 <b>المنطقة:</b> ${district} - ${address}
-🧾 <b>الكود:</b> ${slicedCode}
+🏙️ <b>المدينة:</b> ${city}
+🧾 <b>الكود:</b> ${savedOrder.code}
 🛒 <b>المنتجات:</b> ${items_count}
 💰 <b>الإجمالي:</b> ${total_price}$
 📅 <b>الوقت:</b> ${new Date().toLocaleString()}
 `);
 
+    await session.commitTransaction();
+    session.endSession();
+
     return handleResponse(res, savedOrder, 201);
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
     return handleError(res, error);
   }
 };
