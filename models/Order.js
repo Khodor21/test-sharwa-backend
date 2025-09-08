@@ -24,6 +24,10 @@ const orderSchema = new mongoose.Schema(
     district: {
       type: String,
     },
+    city: {
+      type: String,
+      required: true,
+    },
     address: {
       type: String,
       required: true,
