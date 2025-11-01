@@ -4,7 +4,6 @@ const orderSchema = new mongoose.Schema(
   {
     code: {
       type: String,
-      // required: true,
     },
     items_count: {
       type: Number,
@@ -62,6 +61,19 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["Processing", "Completed", "Rejected"],
       default: "Processing",
+    },
+
+    paid_from_delivery: {
+      type: Boolean,
+      default: false,
+    },
+
+    order_date: {
+      type: String,
+      default: () => {
+        const d = new Date();
+        return `${d.getDate()}-${d.getMonth() + 1}`;
+      },
     },
   },
   {

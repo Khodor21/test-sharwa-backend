@@ -83,7 +83,7 @@ const getOrderById = async (req, res) => {
   }
 };
 
-// Get order by ID
+// Get orders
 const getMyOrders = async (req, res) => {
   try {
     const userId = req.userId;
@@ -94,8 +94,6 @@ const getMyOrders = async (req, res) => {
     handleError(res, error);
   }
 };
-
-// Create a new order
 
 const createOrder = async (req, res) => {
   const session = await mongoose.startSession();
@@ -113,6 +111,7 @@ const createOrder = async (req, res) => {
       items,
       extra_fees,
       total_price,
+      paid_from_delivery, // ✅ new optional field
     } = req.body;
 
     // --- 1. Validate required fields ---
@@ -138,7 +137,6 @@ const createOrder = async (req, res) => {
     // --- 2. Normalize item IDs ---
     const normalizedItems = items.map((item) => {
       let id = null;
-
       if (item._id && typeof item._id === "object" && "$oid" in item._id) {
         id = item._id.$oid;
       } else if (typeof item._id === "string") {
@@ -146,7 +144,6 @@ const createOrder = async (req, res) => {
       } else if (item.id) {
         id = item.id;
       }
-
       return { ...item, id };
     });
 
@@ -186,7 +183,6 @@ const createOrder = async (req, res) => {
 
     // --- 4. Validate stock and calculate total price ---
     let calculatedTotalPrice = 0;
-
     for (const product of productDetails) {
       const matchedItems = normalizedItems.filter(
         (p) => p.id.toString() === product._id.toString()
@@ -292,7 +288,7 @@ const createOrder = async (req, res) => {
       await product.save({ session });
     }
 
-    // --- 6. Create order ---
+    // --- 6. Create the order ---
     const newOrder = new Order({
       items_count,
       user_id: userId || null,
@@ -308,13 +304,19 @@ const createOrder = async (req, res) => {
       })),
       extra_fees,
       total_price,
+      paid_from_delivery: paid_from_delivery || false, // ✅ store value
+      order_date: (() => {
+        // ✅ store day-month
+        const d = new Date();
+        return `${d.getDate()}-${d.getMonth() + 1}`;
+      })(),
     });
 
     const savedOrder = await newOrder.save({ session });
     savedOrder.code = savedOrder._id.toString().slice(0, 6);
     await savedOrder.save({ session });
 
-    // --- 7. Send Telegram notification ---
+    // --- 7. Telegram notification ---
     await sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
@@ -338,24 +340,13 @@ const createOrder = async (req, res) => {
   }
 };
 
-// Utility function to generate a unique serial code
-function generateRandomCode() {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "";
-  for (let i = 0; i < 6; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
-
-// Update order status
 const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, paid_from_delivery } = req.body; // ✅ added
 
     const validStatuses = ["accepted", "rejected"];
-    if (!validStatuses.includes(status)) {
+    if (status && !validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status provided" });
     }
 
@@ -364,10 +355,13 @@ const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    order.status = status;
-    await order.save();
+    if (status) order.status = status;
+    if (typeof paid_from_delivery === "boolean") {
+      order.paid_from_delivery = paid_from_delivery;
+    }
 
-    res.status(200).json({ message: "Order status updated", data: order });
+    await order.save();
+    res.status(200).json({ message: "Order updated", data: order });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
