@@ -341,29 +341,47 @@ const createOrder = async (req, res) => {
 };
 
 const updateOrderStatus = async (req, res) => {
+  console.log("🟢 updateOrderStatus triggered:", req.params, req.body);
+
   try {
     const { id } = req.params;
-    const { status, paid_from_delivery } = req.body; // ✅ added
+    const { status, paid_from_delivery } = req.body;
 
+    // ✅ Validate status input
     const validStatuses = ["accepted", "rejected"];
     if (status && !validStatuses.includes(status)) {
+      console.log("❌ Invalid status received:", status);
       return res.status(400).json({ message: "Invalid status provided" });
     }
 
+    console.log("🔍 Looking for order with ID:", id);
     const order = await Order.findById(id);
+
     if (!order) {
+      console.log("❌ Order not found in database");
       return res.status(404).json({ message: "Order not found" });
     }
 
-    if (status) order.status = status;
-    if (typeof paid_from_delivery === "boolean") {
-      order.paid_from_delivery = paid_from_delivery;
+    console.log("✅ Order found:", order._id);
+
+    // ✅ Apply updates
+    if (status) {
+      order.status = status;
+      console.log("🟡 Status updated to:", status);
     }
 
+    if (typeof paid_from_delivery === "boolean") {
+      order.paid_from_delivery = paid_from_delivery;
+      console.log("🟡 paid_from_delivery updated to:", paid_from_delivery);
+    }
+
+    // ✅ Save updated order
     await order.save();
+    console.log("💾 Order saved successfully:", order._id);
+
     res.status(200).json({ message: "Order updated", data: order });
   } catch (error) {
-    console.error(error);
+    console.error("🔥 Backend error in updateOrderStatus:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
