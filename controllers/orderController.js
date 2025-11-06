@@ -341,30 +341,23 @@ const createOrder = async (req, res) => {
 };
 
 const updateOrderStatus = async (req, res) => {
-  console.log("🟢 updateOrderStatus triggered:", req.params, req.body);
 
   try {
     const { id } = req.params;
     const { status, paid_from_delivery } = req.body;
 
-    // ✅ Validate status input
     const validStatuses = ["accepted", "rejected"];
     if (status && !validStatuses.includes(status)) {
-      console.log("❌ Invalid status received:", status);
       return res.status(400).json({ message: "Invalid status provided" });
     }
 
-    console.log("🔍 Looking for order with ID:", id);
     const order = await Order.findById(id);
 
     if (!order) {
-      console.log("❌ Order not found in database");
       return res.status(404).json({ message: "Order not found" });
     }
 
-    console.log("✅ Order found:", order._id);
 
-    // ✅ Apply updates
     if (status) {
       order.status = status;
       console.log("🟡 Status updated to:", status);

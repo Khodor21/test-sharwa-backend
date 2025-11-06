@@ -26,9 +26,11 @@ const createProduct = async (req, res) => {
     target_audience,
     related_products,
     variations,
+    isVisible, // ✅ added visibility flag
   } = req.body;
 
   try {
+    // ✅ 1. Validate category
     const category = await Category.findById(category_id);
     if (!category) {
       return res
@@ -36,6 +38,7 @@ const createProduct = async (req, res) => {
         .json({ success: false, message: "Category not found" });
     }
 
+    // ✅ 2. Validate main image
     const mainImageFile = req.files?.main_image?.[0];
     const additionalImageFiles = req.files?.images || [];
 
@@ -45,6 +48,7 @@ const createProduct = async (req, res) => {
         .json({ success: false, message: "Main image is required" });
     }
 
+    // ✅ 3. Upload images to Firebase
     const mainImageUrl = await uploadImageToFirebase(
       mainImageFile.buffer,
       mainImageFile.originalname,
@@ -63,19 +67,27 @@ const createProduct = async (req, res) => {
       )
     );
 
-    // Parse variations if passed as JSON string
+    // ✅ 4. Parse variations safely
     let parsedVariations = [];
     if (variations) {
-      parsedVariations = JSON.parse(variations).map((v) => ({
-        name: v.name,
-        options: v.options.map((opt) => ({
-          label: opt.label,
-          image: opt.image || "",
-          quantity: opt.quantity || 0, // quantity per variant
-        })),
-      }));
+      try {
+        parsedVariations = JSON.parse(variations).map((v) => ({
+          name: v.name,
+          options: v.options.map((opt) => ({
+            label: opt.label,
+            image: opt.image || "",
+            quantity: opt.quantity || 0,
+          })),
+        }));
+      } catch (e) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid variations format. Must be valid JSON.",
+        });
+      }
     }
 
+    // ✅ 5. Create new product
     const product = new Product({
       title,
       description,
@@ -84,16 +96,18 @@ const createProduct = async (req, res) => {
       pin,
       main_image: mainImageUrl,
       images: additionalImages,
-      quantity, // optional: could sum variant quantities if needed
+      quantity,
       price,
       discount,
       discount_type,
       target_audience,
       variations: parsedVariations,
+      isVisible: isVisible !== undefined ? isVisible : true, // ✅ default true
     });
 
     await product.save();
 
+    // ✅ 6. Compute final price and send response
     const finalPrice = calculateFinalPrice(
       product.price,
       product.discount,
@@ -218,6 +232,7 @@ const updateProduct = async (req, res) => {
     target_audience,
     related_products,
     variations,
+    isVisible, // ✅ added
   } = req.body;
 
   try {
@@ -228,6 +243,7 @@ const updateProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
+    // ✅ Basic fields update
     if (title) product.title = title;
     if (description) product.description = description;
     if (category_id) product.category_id = category_id;
@@ -236,10 +252,12 @@ const updateProduct = async (req, res) => {
     if (price) product.price = price;
     if (discount) product.discount = discount;
     if (discount_type) product.discount_type = discount_type;
+    if (typeof isVisible !== "undefined") product.isVisible = isVisible; // ✅ visibility toggle
+
     if (variations) {
       try {
         product.variations = JSON.parse(variations);
-      } catch (err) {
+      } catch {
         return res.status(400).json({
           success: false,
           message: "Invalid format for variations",
@@ -252,7 +270,7 @@ const updateProduct = async (req, res) => {
     if (related_products) {
       try {
         product.related_products = JSON.parse(related_products);
-      } catch (err) {
+      } catch {
         return res.status(400).json({
           success: false,
           message: "Invalid format for related_products",
@@ -260,6 +278,7 @@ const updateProduct = async (req, res) => {
       }
     }
 
+    // ✅ Handle main image replacement
     const mainImageFile = req.files?.main_image?.[0];
     if (mainImageFile) {
       const mainImageUrl = await uploadImageToFirebase(
@@ -271,6 +290,7 @@ const updateProduct = async (req, res) => {
       product.main_image = mainImageUrl;
     }
 
+    // ✅ Handle additional images
     const additionalImageFiles = req.files?.images || [];
     if (additionalImageFiles.length > 0) {
       for (const file of additionalImageFiles) {
@@ -280,20 +300,23 @@ const updateProduct = async (req, res) => {
           file.mimetype,
           "products"
         );
-        product.images.push(imageUrl); // ✅ append
+        product.images.push(imageUrl); // append new ones
       }
     }
 
+    // ✅ Handle removed images
     if (req.body.removed_images) {
       try {
         const removed = JSON.parse(req.body.removed_images);
         product.images = product.images.filter((img) => !removed.includes(img));
-      } catch (err) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid removed_images format" });
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid removed_images format",
+        });
       }
     }
+
     await product.save();
 
     const finalPrice = calculateFinalPrice(
