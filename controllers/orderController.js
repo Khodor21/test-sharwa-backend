@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { Order, ORDER_STATUS } = require("../models/Order");
+const { Order } = require("../models/Order");
 const sendTelegramMessage = require("../utils/telegram");
 const Product = require("../models/Product");
 const {
@@ -111,49 +111,30 @@ const createOrder = async (req, res) => {
       items,
       extra_fees,
       total_price,
-      paid_from_delivery,
+      paid_from_delivery, // ✅ new optional field
     } = req.body;
 
-    // ─── 1. Validate required fields ────────────────────────────────────────
-    const missingFields = [];
-    if (!customer_name?.trim()) missingFields.push("Name");
-    if (!phone?.trim()) missingFields.push("Phone");
-    if (!city?.trim()) missingFields.push("City");
-    if (!address?.trim()) missingFields.push("Address");
-
-    if (missingFields.length > 0) {
-      await session.abortTransaction(); // ✅ always clean up session
-      session.endSession();
+    // --- 1. Validate required fields ---
+    if (
+      !customer_name?.trim() ||
+      !phone?.trim() ||
+      !district?.trim() ||
+      !city?.trim() ||
+      !address?.trim()
+    ) {
       return handleResponse(
         res,
         null,
         400,
-        `Please fill required fields: ${missingFields.join(", ")}`,
+        "Please fill all required fields: Name, Phone, District, City, Address",
       );
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      await session.abortTransaction();
-      session.endSession();
       return handleResponse(res, null, 400, "No products in order");
     }
 
-    // ─── 2. Validate numeric inputs early ───────────────────────────────────
-    const parsedExtraFees = parseFloat(extra_fees ?? 0);
-    const parsedTotalPrice = parseFloat(total_price);
-
-    if (isNaN(parsedExtraFees) || parsedExtraFees < 0) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleResponse(res, null, 400, "Invalid extra_fees value");
-    }
-    if (isNaN(parsedTotalPrice) || parsedTotalPrice < 0) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleResponse(res, null, 400, "Invalid total_price value");
-    }
-
-    // ─── 3. Normalize item IDs ───────────────────────────────────────────────
+    // --- 2. Normalize item IDs ---
     const normalizedItems = items.map((item) => {
       let id = null;
       if (item._id && typeof item._id === "object" && "$oid" in item._id) {
@@ -161,15 +142,13 @@ const createOrder = async (req, res) => {
       } else if (typeof item._id === "string") {
         id = item._id;
       } else if (item.id) {
-        id = String(item.id);
+        id = item.id;
       }
       return { ...item, id };
     });
 
     const invalidItems = normalizedItems.filter((p) => !p.id);
     if (invalidItems.length > 0) {
-      await session.abortTransaction();
-      session.endSession();
       return handleResponse(
         res,
         { invalidItems },
@@ -178,195 +157,183 @@ const createOrder = async (req, res) => {
       );
     }
 
-    // ─── 4. Validate ObjectIds before DB hit ────────────────────────────────
-    const invalidObjectIds = normalizedItems.filter(
-      (p) => !mongoose.Types.ObjectId.isValid(p.id),
-    );
-    if (invalidObjectIds.length > 0) {
-      await session.abortTransaction();
-      session.endSession();
-      return handleResponse(res, null, 400, "Some product IDs are malformed");
-    }
+    // --- 3. Fetch products from DB ---
+    const productIds = normalizedItems
+      .map((p) => p.id)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
 
-    const productIds = normalizedItems.map(
-      (p) => new mongoose.Types.ObjectId(p.id),
-    );
-
-    // ─── 5. Fetch products (single DB call) ─────────────────────────────────
     const productDetails = await Product.find({
       _id: { $in: productIds },
     }).session(session);
 
-    const foundIds = new Set(productDetails.map((p) => p._id.toString())); // ✅ O(1) lookup
+    const foundIds = productDetails.map((p) => p._id.toString());
     const missingIds = normalizedItems
-      .map((p) => p.id)
-      .filter((id) => !foundIds.has(id));
+      .map((p) => p.id.toString())
+      .filter((id) => !foundIds.includes(id));
 
     if (missingIds.length > 0) {
-      await session.abortTransaction();
-      session.endSession();
       return handleResponse(
         res,
         { missingIds },
         400,
-        "Some products not found",
+        "Some products are invalid",
       );
     }
 
-    // ─── 6. Stock validation + price calculation ─────────────────────────────
-    const productMap = new Map(
-      productDetails.map((p) => [p._id.toString(), p]),
-    ); // ✅ O(1) product lookup instead of nested .filter()
-
+    // --- 4. Validate stock and calculate total price ---
     let calculatedTotalPrice = 0;
+    for (const product of productDetails) {
+      const matchedItems = normalizedItems.filter(
+        (p) => p.id.toString() === product._id.toString(),
+      );
 
-    for (const item of normalizedItems) {
-      const product = productMap.get(item.id);
-      const quantity = Math.max(1, parseInt(item.quantity) || 1);
+      for (const matchedItem of matchedItems) {
+        const quantity = matchedItem.quantity || 1;
 
-      // Global stock check
-      if (product.quantity < quantity) {
-        await session.abortTransaction();
-        session.endSession();
-        return handleResponse(
-          res,
-          null,
-          400,
-          `Insufficient stock for: ${product.title}`,
-        );
-      }
-
-      // Variant stock check
-      if (item.variations?.length && product.variations?.length) {
-        for (const selVar of item.variations) {
-          const variation = product.variations.find(
-            (v) => v.name === selVar.name,
+        if (product.quantity < quantity) {
+          return handleResponse(
+            res,
+            null,
+            400,
+            `Insufficient stock for product: ${product.title}`,
           );
-          if (!variation) continue;
+        }
 
-          const option = variation.options.find(
-            (o) => o.label === selVar.selected,
-          );
-          if (!option) continue;
-
-          if (option.quantity < quantity) {
-            await session.abortTransaction();
-            session.endSession();
-            return handleResponse(
-              res,
-              null,
-              400,
-              `Insufficient stock for variant "${selVar.selected}" of "${selVar.name}" in: ${product.title}`,
+        // Check variants stock
+        if (matchedItem.variations && product.variations) {
+          for (const selVar of matchedItem.variations) {
+            const varIndex = product.variations.findIndex(
+              (v) => v.name === selVar.name,
             );
+            if (varIndex !== -1) {
+              const optionIndex = product.variations[
+                varIndex
+              ].options.findIndex((opt) => opt.label === selVar.selected);
+              if (optionIndex !== -1) {
+                if (
+                  product.variations[varIndex].options[optionIndex].quantity <
+                  quantity
+                ) {
+                  return handleResponse(
+                    res,
+                    null,
+                    400,
+                    `Insufficient stock for variant ${selVar.selected} of ${selVar.name} in product: ${product.title}`,
+                  );
+                }
+              }
+            }
           }
         }
-      }
 
-      const finalPrice = calculateFinalPrice(
-        product.price,
-        product.discount,
-        product.discount_type,
-      );
-      calculatedTotalPrice += finalPrice * quantity;
+        const finalPrice = calculateFinalPrice(
+          product.price,
+          product.discount,
+          product.discount_type,
+        );
+        calculatedTotalPrice += finalPrice * quantity;
+      }
     }
 
-    calculatedTotalPrice += parsedExtraFees;
+    calculatedTotalPrice += parseFloat(extra_fees || 0);
 
-    // ✅ Tolerance-based comparison to handle floating point drift (e.g. 0.1 + 0.2)
-    if (Math.abs(calculatedTotalPrice - parsedTotalPrice) > 0.01) {
-      await session.abortTransaction();
-      session.endSession();
+    if (
+      parseFloat(calculatedTotalPrice).toFixed(2) !==
+      parseFloat(total_price).toFixed(2)
+    ) {
       return handleResponse(
         res,
-        { calculatedTotalPrice: +calculatedTotalPrice.toFixed(2) },
+        { calculatedTotalPrice: calculatedTotalPrice.toFixed(2) },
         400,
-        "Total price mismatch",
+        "Total price does not match the calculated total price",
       );
     }
 
-    // ─── 7. Deduct stock ─────────────────────────────────────────────────────
-    const savePromises = [];
+    // --- 5. Update product stock safely ---
+    for (const product of productDetails) {
+      const matchedItems = normalizedItems.filter(
+        (p) => p.id.toString() === product._id.toString(),
+      );
 
-    for (const item of normalizedItems) {
-      const product = productMap.get(item.id);
-      const quantity = Math.max(1, parseInt(item.quantity) || 1);
+      for (const matchedItem of matchedItems) {
+        const qty = matchedItem.quantity || 1;
+        product.quantity -= qty;
 
-      product.quantity = Math.max(0, product.quantity - quantity);
-
-      if (item.variations?.length && product.variations?.length) {
-        for (const selVar of item.variations) {
-          const varObj = product.variations.find((v) => v.name === selVar.name);
-          if (!varObj) continue;
-          const option = varObj.options.find(
-            (o) => o.label === selVar.selected,
-          );
-          if (!option) continue;
-          option.quantity = Math.max(0, option.quantity - quantity);
+        if (matchedItem.variations && product.variations) {
+          matchedItem.variations.forEach((selVar) => {
+            const varIndex = product.variations.findIndex(
+              (v) => v.name === selVar.name,
+            );
+            if (varIndex !== -1) {
+              const optionIndex = product.variations[
+                varIndex
+              ].options.findIndex((opt) => opt.label === selVar.selected);
+              if (optionIndex !== -1) {
+                product.variations[varIndex].options[optionIndex].quantity -=
+                  qty;
+                if (
+                  product.variations[varIndex].options[optionIndex].quantity < 0
+                ) {
+                  product.variations[varIndex].options[optionIndex].quantity =
+                    0;
+                }
+              }
+            }
+          });
         }
       }
 
-      savePromises.push(product.save({ session }));
+      await product.save({ session });
     }
 
-    await Promise.all(savePromises); // ✅ parallel saves instead of sequential
-
-    // ─── 8. Create order ─────────────────────────────────────────────────────
+    // --- 6. Create the order ---
     const newOrder = new Order({
       items_count,
       user_id: userId || null,
-      customer_name: customer_name.trim(),
-      phone: phone.trim(),
-      district: district?.trim(),
-      address: address.trim(),
-      city: city.trim(),
+      customer_name,
+      phone,
+      district,
+      address,
+      city,
       products: normalizedItems.map((item) => ({
         id: item.id,
-        quantity: Math.max(1, parseInt(item.quantity) || 1),
+        quantity: item.quantity || 1,
         selected_variations: item.variations || {},
       })),
-      extra_fees: parsedExtraFees, // ✅ Number, not String
-      total_price: parsedTotalPrice, // ✅ Number, not String
-      status: ORDER_STATUS.PROCESSING, // ✅ "processing" — safe constant
-      paid_from_delivery: Boolean(paid_from_delivery),
+      extra_fees,
+      total_price,
+      paid_from_delivery: paid_from_delivery || false, // ✅ store value
       order_date: (() => {
+        // ✅ store day-month
         const d = new Date();
         return `${d.getDate()}-${d.getMonth() + 1}`;
       })(),
     });
 
     const savedOrder = await newOrder.save({ session });
-
     savedOrder.code = savedOrder._id.toString().slice(0, 6);
     await savedOrder.save({ session });
 
-    // ─── 9. Commit before side effects ──────────────────────────────────────
+    // --- 7. Telegram notification ---
+    await sendTelegramMessage(`
+<b>🚨 طلب جديد!</b>
+👤 <b>الاسم:</b> ${customer_name}
+📞 <b>الهاتف:</b> ${phone}
+📍 <b>المنطقة:</b> ${district} - ${address}
+🏙️ <b>المدينة:</b> ${city}
+🧾 <b>الكود:</b> ${savedOrder.code}
+🛒 <b>المنتجات:</b> ${items_count}
+💰 <b>الإجمالي:</b> ${total_price}$
+📅 <b>الوقت:</b> ${new Date().toLocaleString()}
+`);
+
     await session.commitTransaction();
     session.endSession();
 
-    // ✅ Telegram runs AFTER commit — a notification failure won't roll back the order
-    sendTelegramMessage(`
-<b>🚨 طلب جديد!</b>
-👤 <b>الاسم:</b> ${customer_name.trim()}
-📞 <b>الهاتف:</b> ${phone.trim()}
-📍 <b>المنطقة:</b> ${district} - ${address.trim()}
-🏙️ <b>المدينة:</b> ${city.trim()}
-🧾 <b>الكود:</b> ${savedOrder.code}
-🛒 <b>المنتجات:</b> ${items_count}
-💰 <b>الإجمالي:</b> ${parsedTotalPrice}$
-📅 <b>الوقت:</b> ${new Date().toLocaleString()}
-`).catch((err) =>
-      console.error(
-        "[Telegram] Notification failed (non-critical):",
-        err.message,
-      ),
-    ); // ✅ fire-and-forget with silent catch
-
     return handleResponse(res, savedOrder, 201);
   } catch (error) {
-    // ✅ Guard: don't abort an already-committed transaction
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
+    await session.abortTransaction();
     session.endSession();
     return handleError(res, error);
   }
