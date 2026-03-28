@@ -1,36 +1,60 @@
 const mongoose = require("mongoose");
 
+// ✅ Single source of truth for status values
+const ORDER_STATUS = Object.freeze({
+  PROCESSING: "processing",
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+});
+
 const orderSchema = new mongoose.Schema(
   {
     code: {
       type: String,
+      index: true, // ✅ faster lookups by order code
     },
+
     items_count: {
       type: Number,
       required: true,
+      min: [1, "Order must have at least one item"],
     },
+
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      index: true,
     },
+
     customer_name: {
       type: String,
+      required: [true, "Customer name is required"],
+      trim: true,
     },
+
     phone: {
       type: String,
-      required: true,
+      required: [true, "Phone is required"],
+      trim: true,
     },
+
     district: {
       type: String,
+      trim: true,
     },
+
     city: {
       type: String,
-      required: true,
+      required: [true, "City is required"],
+      trim: true,
     },
+
     address: {
       type: String,
-      required: true,
+      required: [true, "Address is required"],
+      trim: true,
     },
+
     products: [
       {
         id: {
@@ -42,6 +66,7 @@ const orderSchema = new mongoose.Schema(
           type: Number,
           required: true,
           default: 1,
+          min: [1, "Quantity must be at least 1"],
         },
         selected_variations: {
           type: Object,
@@ -49,18 +74,28 @@ const orderSchema = new mongoose.Schema(
         },
       },
     ],
+
     extra_fees: {
-      type: String,
+      type: Number, // ✅ was String — math on strings causes bugs
       required: true,
+      default: 0,
+      min: 0,
     },
+
     total_price: {
-      type: String,
+      type: Number, // ✅ was String — never store money as String
       required: true,
+      min: 0,
     },
+
     status: {
       type: String,
-      enum: ["accepted", "rejected", "processing"],
-      default: "Processing",
+      enum: {
+        values: Object.values(ORDER_STATUS),
+        message: "'{VALUE}' is not a valid order status", // ✅ clear error msg
+      },
+      default: ORDER_STATUS.PROCESSING, // ✅ "processing" — matches enum exactly
+      index: true,
     },
 
     paid_from_delivery: {
@@ -78,9 +113,13 @@ const orderSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
+
+// ✅ Compound index for common admin queries
+orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ user_id: 1, createdAt: -1 });
 
 const Order = mongoose.model("Order", orderSchema);
 
-module.exports = Order;
+module.exports = { Order, ORDER_STATUS };

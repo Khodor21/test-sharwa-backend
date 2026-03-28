@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
+const { Order, ORDER_STATUS } = require("../models/Order");
 const sendTelegramMessage = require("../utils/telegram");
-const Order = require("../models/Order");
 const Product = require("../models/Product");
 const {
   handleResponse,
@@ -59,7 +59,7 @@ const getOrderById = async (req, res) => {
       const final_price = calculateFinalPrice(
         productData.price,
         productData.discount,
-        productData.discount_type
+        productData.discount_type,
       );
 
       return {
@@ -111,30 +111,49 @@ const createOrder = async (req, res) => {
       items,
       extra_fees,
       total_price,
-      paid_from_delivery, // ✅ new optional field
+      paid_from_delivery,
     } = req.body;
 
-    // --- 1. Validate required fields ---
-    if (
-      !customer_name?.trim() ||
-      !phone?.trim() ||
-      !district?.trim() ||
-      !city?.trim() ||
-      !address?.trim()
-    ) {
+    // ─── 1. Validate required fields ────────────────────────────────────────
+    const missingFields = [];
+    if (!customer_name?.trim()) missingFields.push("Name");
+    if (!phone?.trim()) missingFields.push("Phone");
+    if (!city?.trim()) missingFields.push("City");
+    if (!address?.trim()) missingFields.push("Address");
+
+    if (missingFields.length > 0) {
+      await session.abortTransaction(); // ✅ always clean up session
+      session.endSession();
       return handleResponse(
         res,
         null,
         400,
-        "Please fill all required fields: Name, Phone, District, City, Address"
+        `Please fill required fields: ${missingFields.join(", ")}`,
       );
     }
 
     if (!Array.isArray(items) || items.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return handleResponse(res, null, 400, "No products in order");
     }
 
-    // --- 2. Normalize item IDs ---
+    // ─── 2. Validate numeric inputs early ───────────────────────────────────
+    const parsedExtraFees = parseFloat(extra_fees ?? 0);
+    const parsedTotalPrice = parseFloat(total_price);
+
+    if (isNaN(parsedExtraFees) || parsedExtraFees < 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return handleResponse(res, null, 400, "Invalid extra_fees value");
+    }
+    if (isNaN(parsedTotalPrice) || parsedTotalPrice < 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return handleResponse(res, null, 400, "Invalid total_price value");
+    }
+
+    // ─── 3. Normalize item IDs ───────────────────────────────────────────────
     const normalizedItems = items.map((item) => {
       let id = null;
       if (item._id && typeof item._id === "object" && "$oid" in item._id) {
@@ -142,206 +161,218 @@ const createOrder = async (req, res) => {
       } else if (typeof item._id === "string") {
         id = item._id;
       } else if (item.id) {
-        id = item.id;
+        id = String(item.id);
       }
       return { ...item, id };
     });
 
     const invalidItems = normalizedItems.filter((p) => !p.id);
     if (invalidItems.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
       return handleResponse(
         res,
         { invalidItems },
         400,
-        "Some products are missing IDs"
+        "Some products are missing IDs",
       );
     }
 
-    // --- 3. Fetch products from DB ---
-    const productIds = normalizedItems
-      .map((p) => p.id)
-      .filter((id) => mongoose.Types.ObjectId.isValid(id))
-      .map((id) => new mongoose.Types.ObjectId(id));
+    // ─── 4. Validate ObjectIds before DB hit ────────────────────────────────
+    const invalidObjectIds = normalizedItems.filter(
+      (p) => !mongoose.Types.ObjectId.isValid(p.id),
+    );
+    if (invalidObjectIds.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return handleResponse(res, null, 400, "Some product IDs are malformed");
+    }
 
+    const productIds = normalizedItems.map(
+      (p) => new mongoose.Types.ObjectId(p.id),
+    );
+
+    // ─── 5. Fetch products (single DB call) ─────────────────────────────────
     const productDetails = await Product.find({
       _id: { $in: productIds },
     }).session(session);
 
-    const foundIds = productDetails.map((p) => p._id.toString());
+    const foundIds = new Set(productDetails.map((p) => p._id.toString())); // ✅ O(1) lookup
     const missingIds = normalizedItems
-      .map((p) => p.id.toString())
-      .filter((id) => !foundIds.includes(id));
+      .map((p) => p.id)
+      .filter((id) => !foundIds.has(id));
 
     if (missingIds.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
       return handleResponse(
         res,
         { missingIds },
         400,
-        "Some products are invalid"
+        "Some products not found",
       );
     }
 
-    // --- 4. Validate stock and calculate total price ---
+    // ─── 6. Stock validation + price calculation ─────────────────────────────
+    const productMap = new Map(
+      productDetails.map((p) => [p._id.toString(), p]),
+    ); // ✅ O(1) product lookup instead of nested .filter()
+
     let calculatedTotalPrice = 0;
-    for (const product of productDetails) {
-      const matchedItems = normalizedItems.filter(
-        (p) => p.id.toString() === product._id.toString()
-      );
 
-      for (const matchedItem of matchedItems) {
-        const quantity = matchedItem.quantity || 1;
+    for (const item of normalizedItems) {
+      const product = productMap.get(item.id);
+      const quantity = Math.max(1, parseInt(item.quantity) || 1);
 
-        if (product.quantity < quantity) {
-          return handleResponse(
-            res,
-            null,
-            400,
-            `Insufficient stock for product: ${product.title}`
+      // Global stock check
+      if (product.quantity < quantity) {
+        await session.abortTransaction();
+        session.endSession();
+        return handleResponse(
+          res,
+          null,
+          400,
+          `Insufficient stock for: ${product.title}`,
+        );
+      }
+
+      // Variant stock check
+      if (item.variations?.length && product.variations?.length) {
+        for (const selVar of item.variations) {
+          const variation = product.variations.find(
+            (v) => v.name === selVar.name,
           );
-        }
+          if (!variation) continue;
 
-        // Check variants stock
-        if (matchedItem.variations && product.variations) {
-          for (const selVar of matchedItem.variations) {
-            const varIndex = product.variations.findIndex(
-              (v) => v.name === selVar.name
+          const option = variation.options.find(
+            (o) => o.label === selVar.selected,
+          );
+          if (!option) continue;
+
+          if (option.quantity < quantity) {
+            await session.abortTransaction();
+            session.endSession();
+            return handleResponse(
+              res,
+              null,
+              400,
+              `Insufficient stock for variant "${selVar.selected}" of "${selVar.name}" in: ${product.title}`,
             );
-            if (varIndex !== -1) {
-              const optionIndex = product.variations[
-                varIndex
-              ].options.findIndex((opt) => opt.label === selVar.selected);
-              if (optionIndex !== -1) {
-                if (
-                  product.variations[varIndex].options[optionIndex].quantity <
-                  quantity
-                ) {
-                  return handleResponse(
-                    res,
-                    null,
-                    400,
-                    `Insufficient stock for variant ${selVar.selected} of ${selVar.name} in product: ${product.title}`
-                  );
-                }
-              }
-            }
           }
         }
-
-        const finalPrice = calculateFinalPrice(
-          product.price,
-          product.discount,
-          product.discount_type
-        );
-        calculatedTotalPrice += finalPrice * quantity;
       }
+
+      const finalPrice = calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type,
+      );
+      calculatedTotalPrice += finalPrice * quantity;
     }
 
-    calculatedTotalPrice += parseFloat(extra_fees || 0);
+    calculatedTotalPrice += parsedExtraFees;
 
-    if (
-      parseFloat(calculatedTotalPrice).toFixed(2) !==
-      parseFloat(total_price).toFixed(2)
-    ) {
+    // ✅ Tolerance-based comparison to handle floating point drift (e.g. 0.1 + 0.2)
+    if (Math.abs(calculatedTotalPrice - parsedTotalPrice) > 0.01) {
+      await session.abortTransaction();
+      session.endSession();
       return handleResponse(
         res,
-        { calculatedTotalPrice: calculatedTotalPrice.toFixed(2) },
+        { calculatedTotalPrice: +calculatedTotalPrice.toFixed(2) },
         400,
-        "Total price does not match the calculated total price"
+        "Total price mismatch",
       );
     }
 
-    // --- 5. Update product stock safely ---
-    for (const product of productDetails) {
-      const matchedItems = normalizedItems.filter(
-        (p) => p.id.toString() === product._id.toString()
-      );
+    // ─── 7. Deduct stock ─────────────────────────────────────────────────────
+    const savePromises = [];
 
-      for (const matchedItem of matchedItems) {
-        const qty = matchedItem.quantity || 1;
-        product.quantity -= qty;
+    for (const item of normalizedItems) {
+      const product = productMap.get(item.id);
+      const quantity = Math.max(1, parseInt(item.quantity) || 1);
 
-        if (matchedItem.variations && product.variations) {
-          matchedItem.variations.forEach((selVar) => {
-            const varIndex = product.variations.findIndex(
-              (v) => v.name === selVar.name
-            );
-            if (varIndex !== -1) {
-              const optionIndex = product.variations[
-                varIndex
-              ].options.findIndex((opt) => opt.label === selVar.selected);
-              if (optionIndex !== -1) {
-                product.variations[varIndex].options[optionIndex].quantity -=
-                  qty;
-                if (
-                  product.variations[varIndex].options[optionIndex].quantity < 0
-                ) {
-                  product.variations[varIndex].options[
-                    optionIndex
-                  ].quantity = 0;
-                }
-              }
-            }
-          });
+      product.quantity = Math.max(0, product.quantity - quantity);
+
+      if (item.variations?.length && product.variations?.length) {
+        for (const selVar of item.variations) {
+          const varObj = product.variations.find((v) => v.name === selVar.name);
+          if (!varObj) continue;
+          const option = varObj.options.find(
+            (o) => o.label === selVar.selected,
+          );
+          if (!option) continue;
+          option.quantity = Math.max(0, option.quantity - quantity);
         }
       }
 
-      await product.save({ session });
+      savePromises.push(product.save({ session }));
     }
 
-    // --- 6. Create the order ---
+    await Promise.all(savePromises); // ✅ parallel saves instead of sequential
+
+    // ─── 8. Create order ─────────────────────────────────────────────────────
     const newOrder = new Order({
       items_count,
       user_id: userId || null,
-      customer_name,
-      phone,
-      district,
-      address,
-      city,
+      customer_name: customer_name.trim(),
+      phone: phone.trim(),
+      district: district?.trim(),
+      address: address.trim(),
+      city: city.trim(),
       products: normalizedItems.map((item) => ({
         id: item.id,
-        quantity: item.quantity || 1,
+        quantity: Math.max(1, parseInt(item.quantity) || 1),
         selected_variations: item.variations || {},
       })),
-      extra_fees,
-      total_price,
-      paid_from_delivery: paid_from_delivery || false, // ✅ store value
+      extra_fees: parsedExtraFees, // ✅ Number, not String
+      total_price: parsedTotalPrice, // ✅ Number, not String
+      status: ORDER_STATUS.PROCESSING, // ✅ "processing" — safe constant
+      paid_from_delivery: Boolean(paid_from_delivery),
       order_date: (() => {
-        // ✅ store day-month
         const d = new Date();
         return `${d.getDate()}-${d.getMonth() + 1}`;
       })(),
     });
 
     const savedOrder = await newOrder.save({ session });
+
     savedOrder.code = savedOrder._id.toString().slice(0, 6);
     await savedOrder.save({ session });
 
-    // --- 7. Telegram notification ---
-    await sendTelegramMessage(`
-<b>🚨 طلب جديد!</b>
-👤 <b>الاسم:</b> ${customer_name}
-📞 <b>الهاتف:</b> ${phone}
-📍 <b>المنطقة:</b> ${district} - ${address}
-🏙️ <b>المدينة:</b> ${city}
-🧾 <b>الكود:</b> ${savedOrder.code}
-🛒 <b>المنتجات:</b> ${items_count}
-💰 <b>الإجمالي:</b> ${total_price}$
-📅 <b>الوقت:</b> ${new Date().toLocaleString()}
-`);
-
+    // ─── 9. Commit before side effects ──────────────────────────────────────
     await session.commitTransaction();
     session.endSession();
 
+    // ✅ Telegram runs AFTER commit — a notification failure won't roll back the order
+    sendTelegramMessage(`
+<b>🚨 طلب جديد!</b>
+👤 <b>الاسم:</b> ${customer_name.trim()}
+📞 <b>الهاتف:</b> ${phone.trim()}
+📍 <b>المنطقة:</b> ${district} - ${address.trim()}
+🏙️ <b>المدينة:</b> ${city.trim()}
+🧾 <b>الكود:</b> ${savedOrder.code}
+🛒 <b>المنتجات:</b> ${items_count}
+💰 <b>الإجمالي:</b> ${parsedTotalPrice}$
+📅 <b>الوقت:</b> ${new Date().toLocaleString()}
+`).catch((err) =>
+      console.error(
+        "[Telegram] Notification failed (non-critical):",
+        err.message,
+      ),
+    ); // ✅ fire-and-forget with silent catch
+
     return handleResponse(res, savedOrder, 201);
   } catch (error) {
-    await session.abortTransaction();
+    // ✅ Guard: don't abort an already-committed transaction
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
     return handleError(res, error);
   }
 };
 
 const updateOrderStatus = async (req, res) => {
-
   try {
     const { id } = req.params;
     const { status, paid_from_delivery } = req.body;
@@ -356,7 +387,6 @@ const updateOrderStatus = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
-
 
     if (status) {
       order.status = status;
