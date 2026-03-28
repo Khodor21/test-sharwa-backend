@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const { Order } = require("../models/Order");
 const sendTelegramMessage = require("../utils/telegram");
+const Order = require("../models/Order");
 const Product = require("../models/Product");
 const {
   handleResponse,
