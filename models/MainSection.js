@@ -10,13 +10,13 @@ const mainSectionSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-    order: {
+  order: {
     type: Number,
     default: 0,
   },
   banners_type: {
     type: String,
-    enum: ["mono", "duo", "trio", "quatro", "slim-mono"],
+    enum: ["mono", "duo", "trio", "quatro", "slim-mono", "slim_mono"],
   },
   banner_1: {
     type: String,
