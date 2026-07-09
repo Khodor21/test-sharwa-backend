@@ -53,7 +53,7 @@ const createProduct = async (req, res) => {
       mainImageFile.buffer,
       mainImageFile.originalname,
       mainImageFile.mimetype,
-      "products"
+      "products",
     );
 
     const additionalImages = await Promise.all(
@@ -62,9 +62,9 @@ const createProduct = async (req, res) => {
           file.buffer,
           file.originalname,
           file.mimetype,
-          "products"
-        )
-      )
+          "products",
+        ),
+      ),
     );
 
     // ✅ 4. Parse variations safely
@@ -108,19 +108,27 @@ const createProduct = async (req, res) => {
     await product.save();
 
     // ✅ 6. Compute final price and send response
-    const finalPrice = calculateFinalPrice(
-      product.price,
-      product.discount,
-      product.discount_type
-    );
-
-    const productData = { ...product.toObject(), final_price: finalPrice };
-
+    const productData = {
+      ...product.toObject(),
+      final_price: calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type,
+      ),
+      related_products: product.related_products.map((related) => ({
+        ...related.toObject(),
+        final_price: calculateFinalPrice(
+          related.price,
+          related.discount,
+          related.discount_type,
+        ),
+      })),
+    };
     return handleResponse(
       res,
       productData,
       201,
-      "Product created successfully"
+      "Product created successfully",
     );
   } catch (error) {
     return handleError(res, error);
@@ -138,7 +146,7 @@ const getAllProducts = async (req, res) => {
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
-        product.discount_type
+        product.discount_type,
       );
       return { ...product.toObject(), final_price: finalPrice };
     });
@@ -173,7 +181,7 @@ const getProductById = async (req, res) => {
     const finalPrice = calculateFinalPrice(
       product.price,
       product.discount,
-      product.discount_type
+      product.discount_type,
     );
     const productData = { ...product.toObject(), final_price: finalPrice };
 
@@ -203,7 +211,7 @@ const getProductsByCategoryTitle = async (req, res) => {
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
-        product.discount_type
+        product.discount_type,
       );
       return { ...product.toObject(), final_price: finalPrice };
     });
@@ -285,7 +293,7 @@ const updateProduct = async (req, res) => {
         mainImageFile.buffer,
         mainImageFile.originalname,
         mainImageFile.mimetype,
-        "products"
+        "products",
       );
       product.main_image = mainImageUrl;
     }
@@ -298,7 +306,7 @@ const updateProduct = async (req, res) => {
           file.buffer,
           file.originalname,
           file.mimetype,
-          "products"
+          "products",
         );
         product.images.push(imageUrl); // append new ones
       }
@@ -322,7 +330,7 @@ const updateProduct = async (req, res) => {
     const finalPrice = calculateFinalPrice(
       product.price,
       product.discount,
-      product.discount_type
+      product.discount_type,
     );
     const productData = { ...product.toObject(), final_price: finalPrice };
 
@@ -330,7 +338,7 @@ const updateProduct = async (req, res) => {
       res,
       productData,
       200,
-      "Product updated successfully"
+      "Product updated successfully",
     );
   } catch (error) {
     return handleError(res, error);
@@ -378,7 +386,7 @@ const searchProducts = async (req, res) => {
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
-        product.discount_type
+        product.discount_type,
       );
       return { ...product.toObject(), final_price: finalPrice };
     });
