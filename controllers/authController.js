@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
+const mongoose = require("mongoose");
+
 const signup = async (req, res) => {
   try {
     const { name, email, password, phoneNumber, district, city, address } =
@@ -20,15 +22,22 @@ const signup = async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
+    // Construct user payload dynamically to prevent passing undefined values
+    const userData = {
       name,
-      email,
       password: hashedPassword,
       phoneNumber,
       district,
       city,
       address,
-    });
+    };
+
+    // Only append email if it was actively provided in the payload
+    if (email) {
+      userData.email = email;
+    }
+
+    const user = new User(userData);
     await user.save();
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
@@ -67,7 +76,7 @@ const login = async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id, is_admin: user._id == "683fea919dabebc7f87a4c5d" },
-      process.env.JWT_SECRET
+      process.env.JWT_SECRET,
     );
 
     res.cookie("token", token, {
@@ -161,7 +170,7 @@ const updateProfile = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { name, phoneNumber, district, city, address },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedUser) {
@@ -184,7 +193,7 @@ const updateUserByAdmin = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { name, phoneNumber, district, city, address },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedUser) {
