@@ -15,4 +15,12 @@ const userSchema = new mongoose.Schema(
 
 const User = mongoose.model("User", userSchema);
 
+User.syncIndexes()
+  .then(() => {
+    console.log("User indexes successfully synchronized with MongoDB.");
+  })
+  .catch((err) => {
+    console.error("Failed to sync User indexes:", err);
+  });
+
 module.exports = User;
