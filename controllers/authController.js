@@ -3,7 +3,6 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
 const mongoose = require("mongoose");
-
 const signup = async (req, res) => {
   try {
     const { name, email, password, phoneNumber, district, city, address } =
@@ -51,6 +50,8 @@ const signup = async (req, res) => {
 
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
+    // CRITICAL: Log the actual error to Vercel so you can see why it failed
+    console.error("SIGNUP ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
