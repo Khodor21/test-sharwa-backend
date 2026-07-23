@@ -106,7 +106,7 @@ const createProduct = async (req, res) => {
     });
 
     await product.save();
-
+    await product.populate("related_products");
     // ✅ 6. Compute final price and send response
     const productData = {
       ...product.toObject(),
