@@ -319,8 +319,17 @@ const createOrder = async (req, res) => {
       savedOrder.code = savedOrder._id.toString().slice(0, 6);
       await savedOrder.save({ session });
 
-      // --- 7. Telegram notification ---
-      await sendTelegramMessage(`
+      // ==========================================
+      // 🚨 التعديل الجوهري هنا لرفع الأداء (Performance Fix)
+      // ==========================================
+
+      // ✅ 7. إنهاء الـ Transaction فوراً لفك القفل (Lock) عن المنتجات للمستخدمين الآخرين
+      await session.commitTransaction();
+      session.endSession();
+
+      // ✅ 8. إرسال إشعار التليجرام بالخلفية بدون إيقاف الطلب وبدون إبقاء المنتج مقفولاً
+      // (أزلنا كلمة await واستخدمنا .catch لكي لا يضرب السيرفر إذا كان التليجرام معطلاً)
+      sendTelegramMessage(`
 <b>🚨 طلب جديد!</b>
 👤 <b>الاسم:</b> ${customer_name}
 📞 <b>الهاتف:</b> ${phone}
@@ -330,16 +339,12 @@ const createOrder = async (req, res) => {
 🛒 <b>المنتجات:</b> ${items_count}
 💰 <b>الإجمالي:</b> ${total_price}$
 📅 <b>الوقت:</b> ${new Date().toLocaleString()}
-`);
+`).catch((err) => console.error("Telegram notification failed:", err));
 
-      // إنهاء الترانزاكشن بنجاح
-      await session.commitTransaction();
-      session.endSession();
-
-      // الخروج من الـ Loop وإرجاع الاستجابة للمستخدم
+      // ✅ 9. الخروج وإرجاع الاستجابة الناجحة للمستخدم فوراً
       return handleResponse(res, savedOrder, 201);
     } catch (error) {
-      // التراجع عن الترانزاكشن في حال حدوث أي خطأ
+      // التراجع عن التعديلات في حال حدوث أي خطأ
       await session.abortTransaction();
       session.endSession();
 
@@ -352,12 +357,13 @@ const createOrder = async (req, res) => {
         console.log(
           `⚠️ Write conflict detected. Retrying attempt ${attempt + 1}...`,
         );
-        // ننتظر قليلاً (100 ملي ثانية * رقم المحاولة) ثم نعيد الكرّة بصمت
+        // ننتظر قليلاً ثم نعيد المحاولة بصمت (الانتظار يزيد تدريجياً مع كل محاولة)
         await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
         continue;
       }
 
-      // إذا استنفدنا المحاولات أو كان الخطأ من نوع آخر، نعيد الخطأ للواجهة
+      // إذا استنفدنا المحاولات أو كان الخطأ برمجياً عادياً، نعيده للواجهة
+      console.error("🔥 Order creation failed:", error);
       return handleError(res, error);
     }
   }
