@@ -18,7 +18,12 @@ require("dotenv").config();
 const PORT = process.env.PORT;
 
 const corsOptions = {
-  origin: ["http://localhost:3000", "https://sharwa-frontend.vercel.app", "https://www.sharwalb.com"],
+  origin: [
+    "http://localhost:3000",
+    "https://sharwa-frontend.vercel.app",
+    "https://www.sharwalb.com",
+    "https://sharwa-frontend-gules.vercel.app",
+  ],
   credentials: true,
 };
 
