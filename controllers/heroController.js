@@ -6,23 +6,23 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const createHero = async (req, res) => {
   try {
-    const { title } = req.body;
-    console.log("Request Body:", req.body);
-    console.log("Uploaded Files:", req.files);
-    if (!req.file) {
-      return handleResponse(res, null, 400, "Image is required");
+    if (!req.files || req.files.length === 0) {
+      return handleResponse(res, null, 400, "At least one image is required");
     }
 
-    const { buffer, originalname, mimetype } = req.file;
+    const imageUrls = [];
 
-    const imageUrl = await uploadImageToFirebase(
-      buffer,
-      originalname,
-      mimetype,
-      "heroes"
-    );
+    for (const file of req.files) {
+      const url = await uploadImageToFirebase(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        "heroes"
+      );
+      imageUrls.push(url);
+    }
 
-    const hero = new Hero({ title, image: imageUrl });
+    const hero = new Hero({ images: imageUrls });
     await hero.save();
 
     handleResponse(res, hero, 201, "Hero section created");

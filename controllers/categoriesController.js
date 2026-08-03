@@ -74,11 +74,9 @@ const updateCategory = async (req, res) => {
 };
 
 // Delete a category by ID
-// akh
-
 const deleteCategory = async (req, res) => {
   try {
-    const { id } = req.params;
+    const category = await Category.findByIdAndDelete(req.params.id);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return handleResponse(res, null, 400, "Invalid category ID");
@@ -89,16 +87,8 @@ const deleteCategory = async (req, res) => {
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }
-    await Product.deleteMany({ category_id: id });
 
-    await MainSection.deleteMany({ category_id: id });
-
-    return handleResponse(
-      res,
-      null,
-      200,
-      "Category, related products, and related main sections deleted"
-    );
+    handleResponse(res, null, 200, "Category deleted successfully");
   } catch (error) {
     return handleError(res, error);
   }

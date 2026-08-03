@@ -11,6 +11,7 @@ const getAllCustomers = async (req, res) => {
 };
 
 const getProfile = async (req, res) => {
+
   try {
     const token = req.cookies.token;
 

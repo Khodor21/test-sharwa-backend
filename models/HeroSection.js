@@ -2,12 +2,8 @@ const mongoose = require("mongoose");
 
 const heroSchema = new mongoose.Schema(
   {
-    title: {
-      type: String,
-      required: true,
-    },
-    image: {
-      type: String,
+    images: {
+      type: [String],
       required: true,
     },
   },

@@ -7,9 +7,11 @@ const signup = async (req, res) => {
     const { name, email, password, phoneNumber, district, city, address } =
       req.body;
 
-    const emailExists = await User.findOne({ email });
-    if (emailExists) {
-      return res.status(400).json({ message: "Email already in use" });
+    if (email) {
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
+        return res.status(400).json({ message: "Email already in use" });
+      }
     }
 
     const phoneExists = await User.findOne({ phoneNumber });
@@ -96,11 +98,11 @@ const getAuthToken = async (req, res) => {
   try {
     const token = req.cookies.token;
     if (!token) {
-      return res.status(401).json({ message: "Unauthorized" });
+      return res.status(401).json({ message: "Unauthorized: No token found" });
     }
-    res.json({ token });
+    return res.json({ token });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: "Server error: " + error.message });
   }
 };
 
