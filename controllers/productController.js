@@ -22,12 +22,15 @@ const createProduct = async (req, res) => {
     quantity,
     price,
     discount,
-    discount_type, // ✅ new
+    discount_type,
     target_audience,
     related_products,
+    variations,
+    isVisible, // ✅ added visibility flag
   } = req.body;
 
   try {
+    // ✅ 1. Validate category
     const category = await Category.findById(category_id);
     if (!category) {
       return res
@@ -35,6 +38,7 @@ const createProduct = async (req, res) => {
         .json({ success: false, message: "Category not found" });
     }
 
+    // ✅ 2. Validate main image
     const mainImageFile = req.files?.main_image?.[0];
     const additionalImageFiles = req.files?.images || [];
 
@@ -44,24 +48,46 @@ const createProduct = async (req, res) => {
         .json({ success: false, message: "Main image is required" });
     }
 
+    // ✅ 3. Upload images to Firebase
     const mainImageUrl = await uploadImageToFirebase(
       mainImageFile.buffer,
       mainImageFile.originalname,
       mainImageFile.mimetype,
-      "products"
+      "products",
     );
 
-    const additionalImages = [];
-    for (const file of additionalImageFiles) {
-      const imageUrl = await uploadImageToFirebase(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
-        "products"
-      );
-      additionalImages.push(imageUrl);
+    const additionalImages = await Promise.all(
+      additionalImageFiles.map((file) =>
+        uploadImageToFirebase(
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+          "products",
+        ),
+      ),
+    );
+
+    // ✅ 4. Parse variations safely
+    let parsedVariations = [];
+    if (variations) {
+      try {
+        parsedVariations = JSON.parse(variations).map((v) => ({
+          name: v.name,
+          options: v.options.map((opt) => ({
+            label: opt.label,
+            image: opt.image || "",
+            quantity: opt.quantity || 0,
+          })),
+        }));
+      } catch (e) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid variations format. Must be valid JSON.",
+        });
+      }
     }
 
+    // ✅ 5. Create new product
     const product = new Product({
       title,
       description,
@@ -75,22 +101,34 @@ const createProduct = async (req, res) => {
       discount,
       discount_type,
       target_audience,
+      variations: parsedVariations,
+      isVisible: isVisible !== undefined ? isVisible : true, // ✅ default true
     });
 
     await product.save();
-
-    const finalPrice = calculateFinalPrice(
-      product.price,
-      product.discount,
-      product.discount_type
-    );
-    const productData = { ...product.toObject(), final_price: finalPrice };
-
+    await product.populate("related_products");
+    // ✅ 6. Compute final price and send response
+    const productData = {
+      ...product.toObject(),
+      final_price: calculateFinalPrice(
+        product.price,
+        product.discount,
+        product.discount_type,
+      ),
+      related_products: product.related_products.map((related) => ({
+        ...related.toObject(),
+        final_price: calculateFinalPrice(
+          related.price,
+          related.discount,
+          related.discount_type,
+        ),
+      })),
+    };
     return handleResponse(
       res,
       productData,
       201,
-      "Product created successfully"
+      "Product created successfully",
     );
   } catch (error) {
     return handleError(res, error);
@@ -108,7 +146,7 @@ const getAllProducts = async (req, res) => {
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
-        product.discount_type
+        product.discount_type,
       );
       return { ...product.toObject(), final_price: finalPrice };
     });
@@ -143,7 +181,7 @@ const getProductById = async (req, res) => {
     const finalPrice = calculateFinalPrice(
       product.price,
       product.discount,
-      product.discount_type
+      product.discount_type,
     );
     const productData = { ...product.toObject(), final_price: finalPrice };
 
@@ -173,7 +211,7 @@ const getProductsByCategoryTitle = async (req, res) => {
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
-        product.discount_type
+        product.discount_type,
       );
       return { ...product.toObject(), final_price: finalPrice };
     });
@@ -188,7 +226,6 @@ const getProductsByCategoryTitle = async (req, res) => {
   }
 };
 
-// Update Product
 const updateProduct = async (req, res) => {
   const { id } = req.params;
   const {
@@ -199,9 +236,11 @@ const updateProduct = async (req, res) => {
     quantity,
     price,
     discount,
-    discount_type, // ✅ added
+    discount_type,
     target_audience,
     related_products,
+    variations,
+    isVisible, // ✅ added
   } = req.body;
 
   try {
@@ -212,6 +251,7 @@ const updateProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
+    // ✅ Basic fields update
     if (title) product.title = title;
     if (description) product.description = description;
     if (category_id) product.category_id = category_id;
@@ -220,12 +260,25 @@ const updateProduct = async (req, res) => {
     if (price) product.price = price;
     if (discount) product.discount = discount;
     if (discount_type) product.discount_type = discount_type;
+    if (typeof isVisible !== "undefined") product.isVisible = isVisible; // ✅ visibility toggle
+
+    if (variations) {
+      try {
+        product.variations = JSON.parse(variations);
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid format for variations",
+        });
+      }
+    }
+
     if (target_audience) product.target_audience = target_audience;
 
     if (related_products) {
       try {
         product.related_products = JSON.parse(related_products);
-      } catch (err) {
+
         return res.status(400).json({
           success: false,
           message: "Invalid format for related_products",
@@ -233,30 +286,43 @@ const updateProduct = async (req, res) => {
       }
     }
 
+    // ✅ Handle main image replacement
     const mainImageFile = req.files?.main_image?.[0];
     if (mainImageFile) {
       const mainImageUrl = await uploadImageToFirebase(
         mainImageFile.buffer,
         mainImageFile.originalname,
         mainImageFile.mimetype,
-        "products"
+        "products",
       );
       product.main_image = mainImageUrl;
     }
 
+    // ✅ Handle additional images
     const additionalImageFiles = req.files?.images || [];
     if (additionalImageFiles.length > 0) {
-      const newImages = [];
       for (const file of additionalImageFiles) {
         const imageUrl = await uploadImageToFirebase(
           file.buffer,
           file.originalname,
           file.mimetype,
-          "products"
+          "products",
         );
-        newImages.push(imageUrl);
+        product.images.push(imageUrl); // append new ones
       }
-      product.images = newImages;
+    }
+
+    // ✅ Handle removed images
+    if (req.body.removed_images) {
+      try {
+        const removed = JSON.parse(req.body.removed_images);
+        product.images = product.images.filter((img) => !removed.includes(img));
+      } catch {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid removed_images format",
+        });
+      }
     }
 
     await product.save();
@@ -264,7 +330,7 @@ const updateProduct = async (req, res) => {
     const finalPrice = calculateFinalPrice(
       product.price,
       product.discount,
-      product.discount_type
+      product.discount_type,
     );
     const productData = { ...product.toObject(), final_price: finalPrice };
 
@@ -272,7 +338,7 @@ const updateProduct = async (req, res) => {
       res,
       productData,
       200,
-      "Product updated successfully"
+      "Product updated successfully",
     );
   } catch (error) {
     return handleError(res, error);
@@ -320,7 +386,7 @@ const searchProducts = async (req, res) => {
       const finalPrice = calculateFinalPrice(
         product.price,
         product.discount,
-        product.discount_type
+        product.discount_type,
       );
       return { ...product.toObject(), final_price: finalPrice };
     });

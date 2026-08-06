@@ -15,7 +15,7 @@ const productSchema = new mongoose.Schema({
     required: true,
   },
   quantity: {
-    type: String,
+    type: Number,
     required: true,
     default: 0,
   },
@@ -57,6 +57,29 @@ const productSchema = new mongoose.Schema({
       type: String,
     },
   ],
+  variations: {
+    type: [
+      {
+        name: { type: String },
+        options: [
+          {
+            label: String,
+            image: String,
+            quantity: {
+              type: Number,
+              required: true,
+              default: 0,
+            },
+          },
+        ],
+      },
+    ],
+    default: [],
+  },
+  isVisible: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const Product = mongoose.model("Product", productSchema);

@@ -15,7 +15,7 @@ const { uploadImageToFirebase } = require("../utils/firebaseUtils");
 // Create a new MainSection
 const createMainSection = async (req, res) => {
   try {
-    const { category_id, title, banners_type } = req.body;
+    const { category_id, title, banners_type, order } = req.body;
 
     // Validate that category_id exists
     const category = await Category.findById(category_id);
@@ -67,18 +67,14 @@ const createMainSection = async (req, res) => {
       category_id,
       title,
       banners_type,
-      ...banners, // Spread banner fields into the object
+      order: order || 0, // Added order with default value 0
+      ...banners,
     });
 
     // Save to the database
     await newMainSection.save();
 
-    handleResponse(
-      res,
-      newMainSection,
-      201,
-      "MainSection created successfully"
-    );
+    handleResponse(res, newMainSection, 201, "MainSection created successfully");
   } catch (error) {
     handleError(res, error);
   }
@@ -94,36 +90,15 @@ const getAllMainSections = async (req, res) => {
     const pinnedProducts = await Product.find({ pin: true });
 
     // Format the response structure
-    const formattedSections = mainSections.map((section) => {
-      // Filter products that match the category_id of the section
-      const filteredProducts = pinnedProducts.filter(
-        (product) =>
-          product.category_id.toString() === section.category_id?._id.toString()
-      );
+    const formattedSections = mainSections
+      .sort((a, b) => a.order - b.order) // Sort by order ascending
+      .map((section) => {
+        const filteredProducts = pinnedProducts.filter(
+          (product) =>
+            product.category_id.toString() ===
+            section.category_id?._id.toString()
+        );
 
-      return {
-        id: section._id,
-        category: section.category_id, // Already populated
-        title: section.title,
-        banners_type: section.banners_type,
-        banners: {
-          banner_1: section.banner_1 || "",
-          banner_2: section.banner_2 || "",
-          banner_3: section.banner_3 || "",
-          banner_4: section.banner_4 || "",
-        },
-        products: filteredProducts.map((product) => {
-          const finalPrice = calculateFinalPrice(
-            product.price,
-            product.discount,
-            product.discount_type
-          );
-          return { ...product.toObject(), final_price: finalPrice };
-        }),
-      };
-    });
-
-    // Send the formatted response
     handleResponse(res, formattedSections);
   } catch (error) {
     handleError(res, error);
@@ -135,29 +110,23 @@ const getMainSectionById = async (req, res) => {
   try {
     const { section_id } = req.params;
 
-    // Fetch the main section by ID and populate category
-    const section = await MainSection.findById(section_id).populate(
-      "category_id"
-    );
-
+    const section = await MainSection.findById(section_id).populate("category_id");
     if (!section) {
       return handleResponse(res, null, 404, "MainSection not found");
     }
 
-    // Fetch all pinned products (to filter later)
     const pinnedProducts = await Product.find({ pin: true });
 
-    // Filter products that match the category_id of the section
     const filteredProducts = pinnedProducts.filter(
       (product) =>
         product.category_id.toString() === section.category_id?._id.toString()
     );
 
-    // Format the response structure
     const formattedSection = {
       category: section.category_id,
       title: section.title,
       banners_type: section.banners_type,
+      order: section.order,
       banners: {
         banner_1: section.banner_1 || "",
         banner_2: section.banner_2 || "",
@@ -167,7 +136,6 @@ const getMainSectionById = async (req, res) => {
       products: filteredProducts,
     };
 
-    // Send the formatted response
     handleResponse(res, formattedSection);
   } catch (error) {
     handleError(res, error);
@@ -178,15 +146,13 @@ const getMainSectionById = async (req, res) => {
 const updateMainSection = async (req, res) => {
   try {
     const { section_id } = req.params;
-    const { category_id, title, banners_type } = req.body;
+    const { category_id, title, banners_type, order } = req.body;
 
-    // Find the section to update
     const mainSection = await MainSection.findById(section_id);
     if (!mainSection) {
       return handleResponse(res, null, 404, "MainSection not found");
     }
 
-    // Validate the new category_id if provided
     if (category_id) {
       const category = await Category.findById(category_id);
       if (!category) {
@@ -195,11 +161,10 @@ const updateMainSection = async (req, res) => {
       mainSection.category_id = category_id;
     }
 
-    // Update title and banners_type if provided
     if (title) mainSection.title = title;
     if (banners_type) mainSection.banners_type = banners_type;
+    if (order !== undefined) mainSection.order = Number(order);
 
-    // Update banner images if new files are uploaded
     if (req.files) {
       if (req.files.banner_1) {
         mainSection.banner_1 = await uploadImageToFirebase(
@@ -235,7 +200,6 @@ const updateMainSection = async (req, res) => {
       }
     }
 
-    // Save the updated document
     await mainSection.save();
 
     handleResponse(res, mainSection, 200, "MainSection updated successfully");
@@ -248,7 +212,6 @@ const updateMainSection = async (req, res) => {
 const deleteMainSection = async (req, res) => {
   try {
     const { id } = req.params;
-
     const deletedMainSection = await MainSection.findByIdAndDelete(id);
 
     if (!deletedMainSection) {
@@ -260,6 +223,7 @@ const deleteMainSection = async (req, res) => {
     handleError(res, error);
   }
 };
+
 module.exports = {
   createMainSection,
   getAllMainSections,

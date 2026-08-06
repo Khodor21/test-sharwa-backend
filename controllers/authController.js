@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
+const mongoose = require("mongoose");
 const signup = async (req, res) => {
   try {
     const { name, email, password, phoneNumber, district, city, address } =
@@ -20,15 +21,22 @@ const signup = async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
+    // Construct user payload dynamically to prevent passing undefined values
+    const userData = {
       name,
-      email,
       password: hashedPassword,
       phoneNumber,
       district,
       city,
       address,
-    });
+    };
+
+    // Only append email if it was actively provided in the payload
+    if (email) {
+      userData.email = email;
+    }
+
+    const user = new User(userData);
     await user.save();
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
@@ -42,6 +50,8 @@ const signup = async (req, res) => {
 
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
+    // CRITICAL: Log the actual error to Vercel so you can see why it failed
+    console.error("SIGNUP ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -65,7 +75,10 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    const token = jwt.sign(
+      { id: user._id, is_admin: user._id == "683fea919dabebc7f87a4c5d" },
+      process.env.JWT_SECRET,
+    );
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -80,6 +93,17 @@ const login = async (req, res) => {
   }
 };
 
+const getAuthToken = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized: No token found" });
+    }
+    return res.json({ token });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error: " + error.message });
+  }
+};
 const logout = async (req, res) => {
   try {
     res.clearCookie("token", {
@@ -91,18 +115,6 @@ const logout = async (req, res) => {
     res.status(200).json({ message: "Logout successful" });
   } catch (error) {
     res.status(500).json({ message: error.message });
-  }
-};
-
-const getAuthToken = async (req, res) => {
-  try {
-    const token = req.cookies.token;
-    if (!token) {
-      return res.status(401).json({ message: "Unauthorized: No token found" });
-    }
-    return res.json({ token });
-  } catch (error) {
-    return res.status(500).json({ message: "Server error: " + error.message });
   }
 };
 
@@ -122,6 +134,8 @@ const deleteAccount = async (req, res) => {
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "None",
+      path: "/",
     });
     res.status(200).json({ message: "Account deleted successfully" });
   } catch (error) {
@@ -157,7 +171,7 @@ const updateProfile = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { name, phoneNumber, district, city, address },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedUser) {
@@ -180,7 +194,7 @@ const updateUserByAdmin = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { name, phoneNumber, district, city, address },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedUser) {
