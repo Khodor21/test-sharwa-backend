@@ -4,7 +4,7 @@ const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: "alfnn-10.appspot.com",
+  storageBucket: "sharwa-images-cloude.firebaseapp.com",
 });
 
 const db = admin.firestore();
