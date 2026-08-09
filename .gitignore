@@ -17,7 +17,7 @@ pids
 # Local environment files
 # .env
 .env.local
-
+config/*.js
 
 /dist
 /build

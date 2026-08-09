@@ -22,7 +22,7 @@ const createCategory = async (req, res) => {
       buffer,
       originalname,
       mimetype,
-      "categories"
+      "categories",
     );
 
     const category = new Category({
@@ -75,7 +75,7 @@ const updateCategory = async (req, res) => {
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype,
-        "categories"
+        "categories",
       );
       category.image = newImageUrl;
     } else {
@@ -95,14 +95,17 @@ const updateCategory = async (req, res) => {
 // Delete a category by ID
 const deleteCategory = async (req, res) => {
   try {
-    const category = await Category.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
 
+    // 1. Validate the ID first
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return handleResponse(res, null, 400, "Invalid category ID");
     }
 
+    // 2. Perform the deletion (declare category only once)
     const category = await Category.findByIdAndDelete(id);
 
+    // 3. Check if it actually existed
     if (!category) {
       return handleResponse(res, null, 404, "Category not found");
     }
