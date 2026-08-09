@@ -278,7 +278,7 @@ const updateProduct = async (req, res) => {
     if (related_products) {
       try {
         product.related_products = JSON.parse(related_products);
-
+      } catch {
         return res.status(400).json({
           success: false,
           message: "Invalid format for related_products",

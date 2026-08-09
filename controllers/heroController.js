@@ -17,7 +17,7 @@ const createHero = async (req, res) => {
         file.buffer,
         file.originalname,
         file.mimetype,
-        "heroes"
+        "heroes",
       );
       imageUrls.push(url);
     }

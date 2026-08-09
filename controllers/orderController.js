@@ -94,6 +94,26 @@ const getMyOrders = async (req, res) => {
 };
 
 const createOrder = async (req, res) => {
+  const MAX_RETRIES = 3;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // initialize session and extract body fields
+      const session = await mongoose.startSession();
+      session.startTransaction();
+      const {
+        items,
+        items_count,
+        customer_name,
+        phone,
+        district,
+        city,
+        address,
+        extra_fees,
+        total_price,
+        paid_from_delivery,
+      } = req.body;
+      const userId = req.userId;
 
       // --- 1. Validate required fields ---
       if (
@@ -322,7 +342,6 @@ const createOrder = async (req, res) => {
       // ✅ 9. الخروج وإرجاع الاستجابة الناجحة للمستخدم فوراً
       return handleResponse(res, savedOrder, 201);
     } catch (error) {
-      // التراجع عن التعديلات في حال حدوث أي خطأ
       await session.abortTransaction();
       session.endSession();
 
@@ -347,7 +366,7 @@ const createOrder = async (req, res) => {
   }
 };
 
-const updateOrderStatus = async (req, res) => {
+async function updateOrderStatus(req, res) {
   try {
     const { id } = req.params;
     const { status, paid_from_delivery } = req.body;
@@ -382,7 +401,7 @@ const updateOrderStatus = async (req, res) => {
     console.error("🔥 Backend error in updateOrderStatus:", error);
     res.status(500).json({ message: "Internal server error" });
   }
-};
+}
 
 module.exports = {
   getAllOrders,

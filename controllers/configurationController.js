@@ -131,7 +131,7 @@ const saveConfig = async (req, res) => {
             buffer,
             originalname,
             mimetype,
-            "rules"
+            "rules",
           );
         }
 
@@ -229,7 +229,7 @@ const getConfig = async (req, res) => {
 };
 const updateConfig = async (req, res) => {
   try {
-    const { type } = req.params; 
+    const { type } = req.params;
     const updatedConfig = await Config.findOneAndUpdate({ type }, req.body, {
       new: true,
     });

@@ -33,7 +33,7 @@ const createMainSection = async (req, res) => {
           req.files.banner_1[0].buffer,
           req.files.banner_1[0].originalname,
           req.files.banner_1[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
       if (req.files.banner_2) {
@@ -41,7 +41,7 @@ const createMainSection = async (req, res) => {
           req.files.banner_2[0].buffer,
           req.files.banner_2[0].originalname,
           req.files.banner_2[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
       if (req.files.banner_3) {
@@ -49,7 +49,7 @@ const createMainSection = async (req, res) => {
           req.files.banner_3[0].buffer,
           req.files.banner_3[0].originalname,
           req.files.banner_3[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
       if (req.files.banner_4) {
@@ -57,7 +57,7 @@ const createMainSection = async (req, res) => {
           req.files.banner_4[0].buffer,
           req.files.banner_4[0].originalname,
           req.files.banner_4[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
     }
@@ -74,7 +74,12 @@ const createMainSection = async (req, res) => {
     // Save to the database
     await newMainSection.save();
 
-    handleResponse(res, newMainSection, 201, "MainSection created successfully");
+    handleResponse(
+      res,
+      newMainSection,
+      201,
+      "MainSection created successfully",
+    );
   } catch (error) {
     handleError(res, error);
   }
@@ -96,8 +101,23 @@ const getAllMainSections = async (req, res) => {
         const filteredProducts = pinnedProducts.filter(
           (product) =>
             product.category_id.toString() ===
-            section.category_id?._id.toString()
+            section.category_id?._id.toString(),
         );
+
+        return {
+          category: section.category_id,
+          title: section.title,
+          banners_type: section.banners_type,
+          order: section.order,
+          banners: {
+            banner_1: section.banner_1 || "",
+            banner_2: section.banner_2 || "",
+            banner_3: section.banner_3 || "",
+            banner_4: section.banner_4 || "",
+          },
+          products: filteredProducts,
+        };
+      });
 
     handleResponse(res, formattedSections);
   } catch (error) {
@@ -110,7 +130,8 @@ const getMainSectionById = async (req, res) => {
   try {
     const { section_id } = req.params;
 
-    const section = await MainSection.findById(section_id).populate("category_id");
+    const section =
+      await MainSection.findById(section_id).populate("category_id");
     if (!section) {
       return handleResponse(res, null, 404, "MainSection not found");
     }
@@ -119,7 +140,7 @@ const getMainSectionById = async (req, res) => {
 
     const filteredProducts = pinnedProducts.filter(
       (product) =>
-        product.category_id.toString() === section.category_id?._id.toString()
+        product.category_id.toString() === section.category_id?._id.toString(),
     );
 
     const formattedSection = {
@@ -171,7 +192,7 @@ const updateMainSection = async (req, res) => {
           req.files.banner_1[0].buffer,
           req.files.banner_1[0].originalname,
           req.files.banner_1[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
       if (req.files.banner_2) {
@@ -179,7 +200,7 @@ const updateMainSection = async (req, res) => {
           req.files.banner_2[0].buffer,
           req.files.banner_2[0].originalname,
           req.files.banner_2[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
       if (req.files.banner_3) {
@@ -187,7 +208,7 @@ const updateMainSection = async (req, res) => {
           req.files.banner_3[0].buffer,
           req.files.banner_3[0].originalname,
           req.files.banner_3[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
       if (req.files.banner_4) {
@@ -195,7 +216,7 @@ const updateMainSection = async (req, res) => {
           req.files.banner_4[0].buffer,
           req.files.banner_4[0].originalname,
           req.files.banner_4[0].mimetype,
-          "main-sections"
+          "main-sections",
         );
       }
     }

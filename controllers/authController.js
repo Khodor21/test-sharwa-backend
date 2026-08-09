@@ -31,7 +31,6 @@ const signup = async (req, res) => {
       address,
     };
 
-    // Only append email if it was actively provided in the payload
     if (email) {
       userData.email = email;
     }
