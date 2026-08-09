@@ -30,4 +30,4 @@ module.exports = {
   handleError,
   handleResponse,
   calculateFinalPrice,
-  
+};
